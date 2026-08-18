@@ -17,18 +17,26 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
+      console.log('Attempting login with username:', username);
       const result = await authAPI.login(username, password);
       console.log('Login response:', result);
-      
-      // Show success message
-      setSuccess('Đăng nhập thành công! Đang chuyển trang...');
-      
-      // Navigate after a short delay to show the success message
-      setTimeout(() => {
-        navigate('/admin/dashboard');
-      }, 800);
+
+      if (result.success) {
+        // Show success message
+        setSuccess('Đăng nhập thành công! Đang chuyển trang...');
+        console.log('Login successful, navigating to dashboard...');
+
+        // Navigate after a short delay to show the success message
+        setTimeout(() => {
+          console.log('Navigating now...');
+          navigate('/admin/dashboard');
+        }, 800);
+      } else {
+        throw new Error('Login failed: no success flag in response');
+      }
     } catch (err) {
       console.error('Login error:', err);
+      console.error('Error details:', err.message, err.stack);
       setError(err.message || 'Đăng nhập thất bại');
       setLoading(false);
     }

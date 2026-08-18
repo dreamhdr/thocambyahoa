@@ -18,10 +18,15 @@ export async function apiRequest(endpoint, options = {}) {
     config.body = JSON.stringify(options.body);
   }
 
+  console.log('API Request:', url, config);
   const response = await fetch(url, config);
+  console.log('API Response status:', response.status, response.statusText);
+
   const data = await response.json();
+  console.log('API Response data:', data);
 
   if (!response.ok) {
+    console.error('API Error:', data.error || 'Request failed');
     throw new Error(data.error || 'Request failed');
   }
 

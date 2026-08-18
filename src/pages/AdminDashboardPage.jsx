@@ -42,10 +42,14 @@ export default function AdminDashboardPage() {
 
   const verifyAuth = async () => {
     try {
+      console.log('Verifying auth...');
       const data = await authAPI.verify();
+      console.log('Auth verified successfully:', data);
       setUser(data.user);
       await fetchData();
     } catch (error) {
+      console.error('Auth verification failed:', error);
+      console.log('Redirecting to /admin due to failed auth');
       navigate('/admin');
     } finally {
       setLoading(false);
