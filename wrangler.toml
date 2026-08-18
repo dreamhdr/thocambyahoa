@@ -1,39 +1,12 @@
+# Cloudflare Pages Configuration
+# Không cần nhiều config - Cloudflare Pages tự động detect
+
 name = "thocambyahoa"
 compatibility_date = "2024-08-01"
+
+# Pages-specific config (optional)
 pages_build_output_dir = "dist"
 
-[env.production]
-# D1 Database binding
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "byahoa-db"
-database_id = "your-d1-database-id"
-
-# R2 Bucket binding
-[[env.production.r2_buckets]]
-binding = "MEDIA_BUCKET"
-bucket_name = "byahoa-media"
-
-# Environment variables
-[env.production.vars]
-JWT_SECRET = "your-jwt-secret-change-this-in-production"
-ADMIN_USERNAME = "admin@byahoa.com"
-ADMIN_PASSWORD_HASH = "your-hashed-password"
-R2_PUBLIC_URL = "https://media.thocambyahoa.com"
-
-# Development environment
-[env.development]
-[[env.development.d1_databases]]
-binding = "DB"
-database_name = "byahoa-db-dev"
-database_id = "your-dev-d1-database-id"
-
-[[env.development.r2_buckets]]
-binding = "MEDIA_BUCKET"
-bucket_name = "byahoa-media-dev"
-
-[env.development.vars]
-JWT_SECRET = "dev-secret-key-change-me"
-ADMIN_USERNAME = "admin@byahoa.com"
-ADMIN_PASSWORD_HASH = "$2a$10$example"
-R2_PUBLIC_URL = "http://localhost:8788/media"
+# Note: Bindings (D1, R2) và Environment Variables
+# được cấu hình trực tiếp trong Cloudflare Dashboard
+# không cần khai báo ở đây cho Pages project
