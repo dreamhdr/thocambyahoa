@@ -15,3 +15,7 @@ pages_build_output_dir = "dist"
 binding = "byahoa_db"
 database_name = "byahoa-db"
 database_id = "2fcc7a4d-a636-4f45-83ad-8665e2085261"
+
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "byahoa-images"
