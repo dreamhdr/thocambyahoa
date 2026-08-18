@@ -17,9 +17,15 @@ async function hashPassword(password) {
     .join('');
 }
 
+function getCookieHeader(token, maxAge, isProduction) {
+  const secure = isProduction ? '; Secure' : '';
+  return `${COOKIE_NAME}=${token}; Path=/; Max-Age=${maxAge}; HttpOnly; SameSite=Strict${secure}`;
+}
+
 export async function onRequestPost(context) {
   const { request, env } = context;
   const url = new URL(request.url);
+  const isProduction = url.hostname !== 'localhost' && !url.hostname.startsWith('127.0.0.1');
 
   // Handle logout
   if (url.pathname.endsWith('/logout')) {
@@ -27,7 +33,7 @@ export async function onRequestPost(context) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Set-Cookie': `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`
+        'Set-Cookie': getCookieHeader('', 0, isProduction)
       }
     });
   }
@@ -65,7 +71,7 @@ export async function onRequestPost(context) {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Set-Cookie': `${COOKIE_NAME}=${token}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`
+        'Set-Cookie': getCookieHeader(token, COOKIE_MAX_AGE, isProduction)
       }
     });
 
