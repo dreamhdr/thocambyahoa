@@ -6,20 +6,30 @@ export default function AdminLoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
 
     try {
-      await authAPI.login(username, password);
-      navigate('/admin/dashboard');
+      const result = await authAPI.login(username, password);
+      console.log('Login response:', result);
+      
+      // Show success message
+      setSuccess('Đăng nhập thành công! Đang chuyển trang...');
+      
+      // Navigate after a short delay to show the success message
+      setTimeout(() => {
+        navigate('/admin/dashboard');
+      }, 800);
     } catch (err) {
+      console.error('Login error:', err);
       setError(err.message || 'Đăng nhập thất bại');
-    } finally {
       setLoading(false);
     }
   };
@@ -40,6 +50,12 @@ export default function AdminLoginPage() {
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+              {success}
             </div>
           )}
 
