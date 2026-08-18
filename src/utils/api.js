@@ -7,6 +7,7 @@ export async function apiRequest(endpoint, options = {}) {
 
   const config = {
     ...options,
+    credentials: 'include', // Important: send cookies with requests
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -111,6 +112,7 @@ export const uploadAPI = {
 
     const response = await fetch(`${API_BASE}/upload`, {
       method: 'POST',
+      credentials: 'include', // Important: send cookies with requests
       body: formData,
     });
 
