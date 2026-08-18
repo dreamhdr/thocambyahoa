@@ -13,7 +13,7 @@ wrangler login
 
 ```bash
 # Tạo production database
-wrangler d1 create byahoa-db
+wrangler d1 create byahoa_db
 
 # Output sẽ hiển thị database_id, copy và lưu lại
 # Ví dụ: database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -22,12 +22,12 @@ wrangler d1 create byahoa-db
 # database_id = "YOUR_DATABASE_ID_HERE"
 
 # Chạy migration để tạo bảng và seed data
-wrangler d1 execute byahoa-db --file=./schema.sql
+wrangler d1 execute byahoa_db --file=./schema.sql
 ```
 
 Kiểm tra database đã được tạo:
 ```bash
-wrangler d1 execute byahoa-db --command="SELECT * FROM products"
+wrangler d1 execute byahoa_db --command="SELECT * FROM products"
 ```
 
 ## Bước 3: Tạo R2 Bucket
@@ -101,7 +101,7 @@ wrangler pages deploy dist --project-name=thocambyahoa
 
 ### D1 Database Binding:
 - Variable name: `DB`
-- D1 database: `byahoa-db`
+- D1 database: `byahoa_db`
 
 ### R2 Bucket Binding:
 - Variable name: `MEDIA_BUCKET`
@@ -161,7 +161,7 @@ Kiểm tra lại thông tin pháp lý
 wrangler pages deployment tail
 
 # Kiểm tra database
-wrangler d1 info byahoa-db
+wrangler d1 info byahoa_db
 ```
 
 ### Lỗi "R2 bucket not found"
@@ -202,17 +202,17 @@ wrangler pages deploy dist --project-name=thocambyahoa
 
 1. Cloudflare Dashboard > Analytics > Web Analytics
 2. Pages > thocambyahoa > Analytics
-3. D1 > byahoa-db > Metrics
+3. D1 > byahoa_db > Metrics
 4. R2 > byahoa-media > Metrics
 
 ## Backup Database
 
 ```bash
 # Export data
-wrangler d1 export byahoa-db --output=backup.sql
+wrangler d1 export byahoa_db --output=backup.sql
 
 # Import data (nếu cần restore)
-wrangler d1 execute byahoa-db --file=backup.sql
+wrangler d1 execute byahoa_db --file=backup.sql
 ```
 
 ## Chi phí dự kiến (Cloudflare Free Tier)

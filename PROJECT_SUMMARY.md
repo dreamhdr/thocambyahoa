@@ -163,9 +163,9 @@ echo -n "YOUR_PASSWORD" | openssl dgst -sha256
 
 3. **Tạo D1 Database**
 ```bash
-wrangler d1 create byahoa-db
+wrangler d1 create byahoa_db
 # Copy database_id vào wrangler.toml
-wrangler d1 execute byahoa-db --file=./schema.sql
+wrangler d1 execute byahoa_db --file=./schema.sql
 ```
 
 4. **Tạo R2 Bucket**

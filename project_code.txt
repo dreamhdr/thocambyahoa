@@ -3427,10 +3427,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 - [ ] Đã có tài khoản Cloudflare
 
 ## 2. Database (D1)
-- [ ] Đã tạo D1 database (`wrangler d1 create byahoa-db`)
+- [ ] Đã tạo D1 database (`wrangler d1 create byahoa_db`)
 - [ ] Đã cập nhật `database_id` trong `wrangler.toml`
-- [ ] Đã chạy migration (`wrangler d1 execute byahoa-db --file=./schema.sql`)
-- [ ] Đã kiểm tra data seed (`wrangler d1 execute byahoa-db --command="SELECT * FROM products"`)
+- [ ] Đã chạy migration (`wrangler d1 execute byahoa_db --file=./schema.sql`)
+- [ ] Đã kiểm tra data seed (`wrangler d1 execute byahoa_db --command="SELECT * FROM products"`)
 
 ## 3. Storage (R2)
 - [ ] Đã tạo R2 bucket (`wrangler r2 bucket create byahoa-media`)
@@ -3474,7 +3474,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 ## 9. Cấu hình Cloudflare Dashboard
 
 ### Bindings
-- [ ] D1 Database: `DB` → `byahoa-db`
+- [ ] D1 Database: `DB` → `byahoa_db`
 - [ ] R2 Bucket: `MEDIA_BUCKET` → `byahoa-media`
 
 ### Environment Variables (Production)
@@ -3528,7 +3528,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 - [ ] File size limit đã được set (5MB)
 
 ## 15. Backup & Monitoring
-- [ ] Backup database ban đầu (`wrangler d1 export byahoa-db --output=backup.sql`)
+- [ ] Backup database ban đầu (`wrangler d1 export byahoa_db --output=backup.sql`)
 - [ ] Enable Cloudflare Analytics
 - [ ] Setup monitoring alerts (optional)
 - [ ] Ghi chép thông tin quan trọng (database_id, bucket_name, v.v.)
@@ -3559,7 +3559,7 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 ### Database không connect
 ```bash
-wrangler d1 info byahoa-db
+wrangler d1 info byahoa_db
 # Kiểm tra binding trong Dashboard
 ```
 
@@ -3943,12 +3943,12 @@ Thêm section mới:
 
 ### Backup Database
 ```bash
-wrangler d1 export byahoa-db --output=backup-$(date +%Y%m%d).sql
+wrangler d1 export byahoa_db --output=backup-$(date +%Y%m%d).sql
 ```
 
 ### Restore Database
 ```bash
-wrangler d1 execute byahoa-db --file=backup-20240818.sql
+wrangler d1 execute byahoa_db --file=backup-20240818.sql
 ```
 
 ### Backup Images từ R2
@@ -3992,7 +3992,7 @@ wrangler login
 
 ```bash
 # Tạo production database
-wrangler d1 create byahoa-db
+wrangler d1 create byahoa_db
 
 # Output sẽ hiển thị database_id, copy và lưu lại
 # Ví dụ: database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -4001,12 +4001,12 @@ wrangler d1 create byahoa-db
 # database_id = "YOUR_DATABASE_ID_HERE"
 
 # Chạy migration để tạo bảng và seed data
-wrangler d1 execute byahoa-db --file=./schema.sql
+wrangler d1 execute byahoa_db --file=./schema.sql
 ```
 
 Kiểm tra database đã được tạo:
 ```bash
-wrangler d1 execute byahoa-db --command="SELECT * FROM products"
+wrangler d1 execute byahoa_db --command="SELECT * FROM products"
 ```
 
 ## Bước 3: Tạo R2 Bucket
@@ -4080,7 +4080,7 @@ wrangler pages deploy dist --project-name=thocambyahoa
 
 ### D1 Database Binding:
 - Variable name: `DB`
-- D1 database: `byahoa-db`
+- D1 database: `byahoa_db`
 
 ### R2 Bucket Binding:
 - Variable name: `MEDIA_BUCKET`
@@ -4140,7 +4140,7 @@ Kiểm tra lại thông tin pháp lý
 wrangler pages deployment tail
 
 # Kiểm tra database
-wrangler d1 info byahoa-db
+wrangler d1 info byahoa_db
 ```
 
 ### Lỗi "R2 bucket not found"
@@ -4181,17 +4181,17 @@ wrangler pages deploy dist --project-name=thocambyahoa
 
 1. Cloudflare Dashboard > Analytics > Web Analytics
 2. Pages > thocambyahoa > Analytics
-3. D1 > byahoa-db > Metrics
+3. D1 > byahoa_db > Metrics
 4. R2 > byahoa-media > Metrics
 
 ## Backup Database
 
 ```bash
 # Export data
-wrangler d1 export byahoa-db --output=backup.sql
+wrangler d1 export byahoa_db --output=backup.sql
 
 # Import data (nếu cần restore)
-wrangler d1 execute byahoa-db --file=backup.sql
+wrangler d1 execute byahoa_db --file=backup.sql
 ```
 
 ## Chi phí dự kiến (Cloudflare Free Tier)
@@ -4647,7 +4647,7 @@ curl https://thocambyahoa.com/api/blogs
 ### Backup Database
 ```bash
 # Tạo backup
-wrangler d1 export byahoa-db --output=backup-$(date +%Y%m%d).sql
+wrangler d1 export byahoa_db --output=backup-$(date +%Y%m%d).sql
 
 # Lưu file backup vào nơi an toàn
 ```
@@ -5069,9 +5069,9 @@ echo -n "YOUR_PASSWORD" | openssl dgst -sha256
 
 3. **Tạo D1 Database**
 ```bash
-wrangler d1 create byahoa-db
+wrangler d1 create byahoa_db
 # Copy database_id vào wrangler.toml
-wrangler d1 execute byahoa-db --file=./schema.sql
+wrangler d1 execute byahoa_db --file=./schema.sql
 ```
 
 4. **Tạo R2 Bucket**
@@ -5298,15 +5298,15 @@ chmod +x create-password-hash.sh
 wrangler login
 
 # Tạo database
-wrangler d1 create byahoa-db
+wrangler d1 create byahoa_db
 
 # Copy database_id vào wrangler.toml (dòng database_id)
 
 # Chạy migration
-wrangler d1 execute byahoa-db --file=./schema.sql
+wrangler d1 execute byahoa_db --file=./schema.sql
 
 # Kiểm tra
-wrangler d1 execute byahoa-db --command="SELECT * FROM products"
+wrangler d1 execute byahoa_db --command="SELECT * FROM products"
 ```
 
 ### Bước 4: Setup Cloudflare R2 Storage (2 phút)
@@ -5338,7 +5338,7 @@ wrangler pages deploy dist --project-name=thocambyahoa
 1. Vào https://dash.cloudflare.com
 2. Pages > thocambyahoa > Settings > Functions
 3. Thêm Bindings:
-   - D1: `DB` → `byahoa-db`
+   - D1: `DB` → `byahoa_db`
    - R2: `MEDIA_BUCKET` → `byahoa-media`
 4. Thêm Environment Variables:
    - `JWT_SECRET`: (tạo bằng `openssl rand -base64 32`)
@@ -5384,7 +5384,7 @@ wrangler pages deploy dist --project-name=thocambyahoa
 ### Lỗi: Database not found
 ```bash
 # Kiểm tra database_id trong wrangler.toml
-wrangler d1 info byahoa-db
+wrangler d1 info byahoa_db
 ```
 
 ### Lỗi: Upload ảnh không work
@@ -5451,7 +5451,7 @@ echo -n "YOUR_PASSWORD" | openssl dgst -sha256
 
 4. **Backup Database**:
    ```bash
-   wrangler d1 export byahoa-db --output=backup.sql
+   wrangler d1 export byahoa_db --output=backup.sql
    ```
 
 ---
@@ -5514,11 +5514,11 @@ npm install
 
 ```bash
 # Tạo database mới
-npx wrangler d1 create byahoa-db
+npx wrangler d1 create byahoa_db
 
 # Lấy database_id và cập nhật vào wrangler.toml
 # Chạy migration
-npx wrangler d1 execute byahoa-db --file=./schema.sql
+npx wrangler d1 execute byahoa_db --file=./schema.sql
 ```
 
 ### 3. Tạo R2 Bucket
@@ -5535,7 +5535,7 @@ Cập nhật file `wrangler.toml` với thông tin database và bucket:
 ```toml
 [[env.production.d1_databases]]
 binding = "DB"
-database_name = "byahoa-db"
+database_name = "byahoa_db"
 database_id = "YOUR_DATABASE_ID_HERE"
 
 [[env.production.r2_buckets]]
@@ -5559,7 +5559,7 @@ Cập nhật `ADMIN_PASSWORD_HASH` trong `wrangler.toml` với hash vừa tạo.
 npm run dev
 
 # Terminal 2: Cloudflare Pages Functions (nếu cần test API local)
-npx wrangler pages dev dist --d1=DB=byahoa-db --r2=MEDIA_BUCKET=byahoa-media
+npx wrangler pages dev dist --d1=DB=byahoa_db --r2=MEDIA_BUCKET=byahoa-media
 ```
 
 ## Deploy lên Cloudflare Pages
@@ -5591,7 +5591,7 @@ npm run deploy
    - `R2_PUBLIC_URL`: URL công khai của R2 bucket
 
 4. Bindings:
-   - D1 Database: `DB` → `byahoa-db`
+   - D1 Database: `DB` → `byahoa_db`
    - R2 Bucket: `MEDIA_BUCKET` → `byahoa-media`
 
 ### 4. Cấu hình R2 Public Access

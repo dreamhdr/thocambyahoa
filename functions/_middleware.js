@@ -6,8 +6,12 @@ const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 // Paths that bypass maintenance mode
 const BYPASS_PATHS = [
-  '/api/', // Allow API access
+  '/api/',           // Allow API access
+  '/assets/',        // Allow Vite build assets (CSS, JS, images)
 ];
+
+// Bypass for common static file extensions
+const STATIC_EXTENSIONS = /\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/i;
 
 const MAINTENANCE_HTML = `
 <!DOCTYPE html>
@@ -210,9 +214,8 @@ const MAINTENANCE_HTML = `
 `;
 
 export async function onRequest(context) {
-  const { request, next, env } = context;
+  const { request, next } = context;
 
-  // Skip maintenance mode if disabled
   if (!MAINTENANCE_MODE) {
     return next();
   }
@@ -220,8 +223,13 @@ export async function onRequest(context) {
   const url = new URL(request.url);
   const path = url.pathname;
 
-  // Bypass maintenance for API routes
+  // Bypass maintenance for API routes and static assets folder
   if (BYPASS_PATHS.some(bypassPath => path.startsWith(bypassPath))) {
+    return next();
+  }
+
+  // Bypass for static file extensions
+  if (STATIC_EXTENSIONS.test(path)) {
     return next();
   }
 
@@ -236,7 +244,6 @@ export async function onRequest(context) {
 
   const accessToken = cookies[MAINTENANCE_COOKIE];
 
-  // If valid access token, allow access
   if (accessToken === MAINTENANCE_PASSWORD) {
     return next();
   }

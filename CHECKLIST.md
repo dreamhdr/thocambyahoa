@@ -7,10 +7,10 @@
 - [ ] Đã có tài khoản Cloudflare
 
 ## 2. Database (D1)
-- [ ] Đã tạo D1 database (`wrangler d1 create byahoa-db`)
+- [ ] Đã tạo D1 database (`wrangler d1 create byahoa_db`)
 - [ ] Đã cập nhật `database_id` trong `wrangler.toml`
-- [ ] Đã chạy migration (`wrangler d1 execute byahoa-db --file=./schema.sql`)
-- [ ] Đã kiểm tra data seed (`wrangler d1 execute byahoa-db --command="SELECT * FROM products"`)
+- [ ] Đã chạy migration (`wrangler d1 execute byahoa_db --file=./schema.sql`)
+- [ ] Đã kiểm tra data seed (`wrangler d1 execute byahoa_db --command="SELECT * FROM products"`)
 
 ## 3. Storage (R2)
 - [ ] Đã tạo R2 bucket (`wrangler r2 bucket create byahoa-media`)
@@ -54,7 +54,7 @@
 ## 9. Cấu hình Cloudflare Dashboard
 
 ### Bindings
-- [ ] D1 Database: `DB` → `byahoa-db`
+- [ ] D1 Database: `DB` → `byahoa_db`
 - [ ] R2 Bucket: `MEDIA_BUCKET` → `byahoa-media`
 
 ### Environment Variables (Production)
@@ -108,7 +108,7 @@
 - [ ] File size limit đã được set (5MB)
 
 ## 15. Backup & Monitoring
-- [ ] Backup database ban đầu (`wrangler d1 export byahoa-db --output=backup.sql`)
+- [ ] Backup database ban đầu (`wrangler d1 export byahoa_db --output=backup.sql`)
 - [ ] Enable Cloudflare Analytics
 - [ ] Setup monitoring alerts (optional)
 - [ ] Ghi chép thông tin quan trọng (database_id, bucket_name, v.v.)
@@ -139,7 +139,7 @@
 
 ### Database không connect
 ```bash
-wrangler d1 info byahoa-db
+wrangler d1 info byahoa_db
 # Kiểm tra binding trong Dashboard
 ```
 

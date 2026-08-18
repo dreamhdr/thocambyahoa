@@ -52,7 +52,7 @@ curl https://thocambyahoa.com/api/blogs
 ### Backup Database
 ```bash
 # Tạo backup
-wrangler d1 export byahoa-db --output=backup-$(date +%Y%m%d).sql
+wrangler d1 export byahoa_db --output=backup-$(date +%Y%m%d).sql
 
 # Lưu file backup vào nơi an toàn
 ```

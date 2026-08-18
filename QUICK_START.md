@@ -24,15 +24,15 @@ chmod +x create-password-hash.sh
 wrangler login
 
 # Tạo database
-wrangler d1 create byahoa-db
+wrangler d1 create byahoa_db
 
 # Copy database_id vào wrangler.toml (dòng database_id)
 
 # Chạy migration
-wrangler d1 execute byahoa-db --file=./schema.sql
+wrangler d1 execute byahoa_db --file=./schema.sql
 
 # Kiểm tra
-wrangler d1 execute byahoa-db --command="SELECT * FROM products"
+wrangler d1 execute byahoa_db --command="SELECT * FROM products"
 ```
 
 ### Bước 4: Setup Cloudflare R2 Storage (2 phút)
@@ -64,7 +64,7 @@ wrangler pages deploy dist --project-name=thocambyahoa
 1. Vào https://dash.cloudflare.com
 2. Pages > thocambyahoa > Settings > Functions
 3. Thêm Bindings:
-   - D1: `DB` → `byahoa-db`
+   - D1: `DB` → `byahoa_db`
    - R2: `MEDIA_BUCKET` → `byahoa-media`
 4. Thêm Environment Variables:
    - `JWT_SECRET`: (tạo bằng `openssl rand -base64 32`)
@@ -110,7 +110,7 @@ wrangler pages deploy dist --project-name=thocambyahoa
 ### Lỗi: Database not found
 ```bash
 # Kiểm tra database_id trong wrangler.toml
-wrangler d1 info byahoa-db
+wrangler d1 info byahoa_db
 ```
 
 ### Lỗi: Upload ảnh không work
@@ -177,7 +177,7 @@ echo -n "YOUR_PASSWORD" | openssl dgst -sha256
 
 4. **Backup Database**:
    ```bash
-   wrangler d1 export byahoa-db --output=backup.sql
+   wrangler d1 export byahoa_db --output=backup.sql
    ```
 
 ---

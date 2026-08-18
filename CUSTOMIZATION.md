@@ -220,12 +220,12 @@ Thêm section mới:
 
 ### Backup Database
 ```bash
-wrangler d1 export byahoa-db --output=backup-$(date +%Y%m%d).sql
+wrangler d1 export byahoa_db --output=backup-$(date +%Y%m%d).sql
 ```
 
 ### Restore Database
 ```bash
-wrangler d1 execute byahoa-db --file=backup-20240818.sql
+wrangler d1 execute byahoa_db --file=backup-20240818.sql
 ```
 
 ### Backup Images từ R2

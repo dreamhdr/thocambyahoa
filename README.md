@@ -22,11 +22,11 @@ npm install
 
 ```bash
 # Tạo database mới
-npx wrangler d1 create byahoa-db
+npx wrangler d1 create byahoa_db
 
 # Lấy database_id và cập nhật vào wrangler.toml
 # Chạy migration
-npx wrangler d1 execute byahoa-db --file=./schema.sql
+npx wrangler d1 execute byahoa_db --file=./schema.sql
 ```
 
 ### 3. Tạo R2 Bucket
@@ -43,7 +43,7 @@ Cập nhật file `wrangler.toml` với thông tin database và bucket:
 ```toml
 [[env.production.d1_databases]]
 binding = "DB"
-database_name = "byahoa-db"
+database_name = "byahoa_db"
 database_id = "YOUR_DATABASE_ID_HERE"
 
 [[env.production.r2_buckets]]
@@ -67,7 +67,7 @@ Cập nhật `ADMIN_PASSWORD_HASH` trong `wrangler.toml` với hash vừa tạo.
 npm run dev
 
 # Terminal 2: Cloudflare Pages Functions (nếu cần test API local)
-npx wrangler pages dev dist --d1=DB=byahoa-db --r2=MEDIA_BUCKET=byahoa-media
+npx wrangler pages dev dist --d1=DB=byahoa_db --r2=MEDIA_BUCKET=byahoa-media
 ```
 
 ## Deploy lên Cloudflare Pages
@@ -99,7 +99,7 @@ npm run deploy
    - `R2_PUBLIC_URL`: URL công khai của R2 bucket
 
 4. Bindings:
-   - D1 Database: `DB` → `byahoa-db`
+   - D1 Database: `DB` → `byahoa_db`
    - R2 Bucket: `MEDIA_BUCKET` → `byahoa-media`
 
 ### 4. Cấu hình R2 Public Access
