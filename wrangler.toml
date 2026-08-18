@@ -10,3 +10,8 @@ pages_build_output_dir = "dist"
 # Note: Bindings (D1, R2) và Environment Variables
 # được cấu hình trực tiếp trong Cloudflare Dashboard
 # không cần khai báo ở đây cho Pages project
+
+[[d1_databases]]
+binding = "byahoa_db"
+database_name = "byahoa-db"
+database_id = "2fcc7a4d-a636-4f45-83ad-8665e2085261"

@@ -1,0 +1,6247 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+# File Summary
+
+## Purpose
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+## File Format
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A header with the file path (## File: path/to/file)
+  b. The full contents of the file in a code block
+
+## Usage Guidelines
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+## Notes
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+# Directory Structure
+````
+functions/
+  api/
+    .gitkeep
+    auth.js
+    blogs.js
+    categories.js
+    jwt-helper.js
+    products.js
+    upload.js
+public/
+  images/
+    .gitkeep
+  _headers
+  _redirects
+  favicon.svg
+  manifest.json
+  robots.txt
+src/
+  components/
+    .gitkeep
+    BlogCard.jsx
+    ContactButtons.jsx
+    Footer.jsx
+    Header.jsx
+    ProductCard.jsx
+  pages/
+    .gitkeep
+    AdminDashboardPage.jsx
+    AdminLoginPage.jsx
+    BlogDetailPage.jsx
+    BlogsPage.jsx
+    ContactPage.jsx
+    HomePage.jsx
+    ProductDetailPage.jsx
+    ProductsPage.jsx
+  styles/
+    .gitkeep
+    index.css
+  utils/
+    .gitkeep
+    api.js
+    seo.js
+  App.jsx
+  main.jsx
+.env.example
+.gitignore
+.gitkeep
+check-project.sh
+CHECKLIST.md
+CLOUDFLARE_DEPLOY.md
+cors.json
+create-password-hash.sh
+CUSTOMIZATION.md
+DEPLOYMENT.md
+HANDOVER.md
+index.html
+index.html.template
+LICENSE
+MAINTENANCE.md
+package.json
+postcss.config.js
+PROJECT_COMPLETE.txt
+PROJECT_SUMMARY.md
+QUICK_START.md
+quick-push.sh
+README.md
+schema.sql
+tailwind.config.js
+test-api.sh
+vite.config.js
+wrangler.toml
+````
+
+# Files
+
+## File: functions/api/.gitkeep
+````
+# API functions directory
+````
+
+## File: functions/api/auth.js
+````javascript
+// Cloudflare Pages Functions - Authentication API
+// POST /api/auth - Login
+// POST /api/auth/logout - Logout
+// GET /api/auth/verify - Verify JWT token
+
+import { sign, verify } from './jwt-helper.js';
+
+const COOKIE_NAME = 'byahoa_auth';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+
+  // Handle logout
+  if (url.pathname.endsWith('/logout')) {
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Set-Cookie': `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`
+      }
+    });
+  }
+
+  // Handle login
+  try {
+    const { username, password } = await request.json();
+
+    if (!username || !password) {
+      return new Response(JSON.stringify({ error: 'Thiếu thông tin đăng nhập' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Verify credentials
+    const adminUsername = env.ADMIN_USERNAME || 'admin@byahoa.com';
+    const adminPasswordHash = env.ADMIN_PASSWORD_HASH;
+    const passwordHash = await hashPassword(password);
+
+    if (username !== adminUsername || passwordHash !== adminPasswordHash) {
+      return new Response(JSON.stringify({ error: 'Thông tin đăng nhập không chính xác' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Generate JWT token
+    const token = await sign(
+      { username, role: 'admin', exp: Math.floor(Date.now() / 1000) + COOKIE_MAX_AGE },
+      env.JWT_SECRET || 'dev-secret'
+    );
+
+    return new Response(JSON.stringify({ success: true, user: { username, role: 'admin' } }), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Set-Cookie': `${COOKIE_NAME}=${token}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; Secure; SameSite=Strict`
+      }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: 'Lỗi server: ' + error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+
+export async function onRequestGet(context) {
+  const { request, env } = context;
+
+  // Verify token from cookie
+  try {
+    const cookieHeader = request.headers.get('Cookie') || '';
+    const cookies = Object.fromEntries(
+      cookieHeader.split(';').map(c => {
+        const [key, ...v] = c.trim().split('=');
+        return [key, v.join('=')];
+      })
+    );
+
+    const token = cookies[COOKIE_NAME];
+
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Chưa đăng nhập' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const payload = await verify(token, env.JWT_SECRET || 'dev-secret');
+
+    return new Response(JSON.stringify({
+      success: true,
+      user: { username: payload.username, role: payload.role }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: 'Token không hợp lệ' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
+````
+
+## File: functions/api/blogs.js
+````javascript
+// Cloudflare Pages Functions - Blogs API
+// GET /api/blogs - List all blogs
+// GET /api/blogs/:slug - Get blog by slug
+// POST /api/blogs - Create blog (admin)
+// PUT /api/blogs/:id - Update blog (admin)
+// DELETE /api/blogs/:id - Delete blog (admin)
+
+import { verify } from './jwt-helper.js';
+
+const COOKIE_NAME = 'byahoa_auth';
+
+async function verifyAuth(request, env) {
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookies = Object.fromEntries(
+    cookieHeader.split(';').map(c => {
+      const [key, ...v] = c.trim().split('=');
+      return [key, v.join('=')];
+    })
+  );
+
+  const token = cookies[COOKIE_NAME];
+  if (!token) throw new Error('Unauthorized');
+
+  return await verify(token, env.JWT_SECRET || 'dev-secret');
+}
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
+
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders()
+  });
+}
+
+// GET /api/blogs or /api/blogs/:slug
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+
+  try {
+    // Get blog by slug: /api/blogs/:slug
+    if (pathParts.length > 2 && pathParts[2]) {
+      const slug = pathParts[2];
+      const blog = await env.DB.prepare(
+        'SELECT * FROM blogs WHERE slug = ?'
+      ).bind(slug).first();
+
+      if (!blog) {
+        return new Response(JSON.stringify({ error: 'Không tìm thấy bài viết' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+        });
+      }
+
+      return new Response(JSON.stringify(blog), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    // List all blogs: /api/blogs
+    const limit = parseInt(url.searchParams.get('limit')) || 100;
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM blogs ORDER BY created_at DESC LIMIT ?'
+    ).bind(limit).all();
+
+    return new Response(JSON.stringify(results), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+
+// POST /api/blogs - Create blog (admin only)
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  try {
+    await verifyAuth(request, env);
+
+    const { title, slug, summary, content, cover_image } = await request.json();
+
+    if (!title || !slug) {
+      return new Response(JSON.stringify({ error: 'Thiếu thông tin bắt buộc' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    const result = await env.DB.prepare(
+      `INSERT INTO blogs (title, slug, summary, content, cover_image)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(title, slug, summary, content, cover_image).run();
+
+    return new Response(JSON.stringify({ success: true, id: result.meta.last_row_id }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.message === 'Unauthorized' ? 401 : 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+
+// PUT /api/blogs/:id - Update blog (admin only)
+export async function onRequestPut(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  const id = pathParts[2];
+
+  try {
+    await verifyAuth(request, env);
+
+    const { title, slug, summary, content, cover_image } = await request.json();
+
+    await env.DB.prepare(
+      `UPDATE blogs
+       SET title = ?, slug = ?, summary = ?, content = ?, cover_image = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`
+    ).bind(title, slug, summary, content, cover_image, id).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.message === 'Unauthorized' ? 401 : 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+
+// DELETE /api/blogs/:id - Delete blog (admin only)
+export async function onRequestDelete(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  const id = pathParts[2];
+
+  try {
+    await verifyAuth(request, env);
+
+    await env.DB.prepare('DELETE FROM blogs WHERE id = ?').bind(id).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.message === 'Unauthorized' ? 401 : 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+````
+
+## File: functions/api/categories.js
+````javascript
+// Cloudflare Pages Functions - Categories API
+// GET /api/categories - List all categories
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
+
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders()
+  });
+}
+
+export async function onRequestGet(context) {
+  const { env } = context;
+
+  try {
+    const { results } = await env.DB.prepare(
+      'SELECT * FROM categories ORDER BY name'
+    ).all();
+
+    return new Response(JSON.stringify(results), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+````
+
+## File: functions/api/jwt-helper.js
+````javascript
+// JWT Helper functions for Cloudflare Workers
+// Simple JWT implementation using Web Crypto API
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+function base64UrlEncode(data) {
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(data)));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function base64UrlDecode(str) {
+  str = str.replace(/-/g, '+').replace(/_/g, '/');
+  while (str.length % 4) str += '=';
+  return Uint8Array.from(atob(str), c => c.charCodeAt(0));
+}
+
+async function hmacSign(data, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data));
+  return base64UrlEncode(signature);
+}
+
+export async function sign(payload, secret) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const headerEncoded = base64UrlEncode(encoder.encode(JSON.stringify(header)));
+  const payloadEncoded = base64UrlEncode(encoder.encode(JSON.stringify(payload)));
+  const data = `${headerEncoded}.${payloadEncoded}`;
+  const signature = await hmacSign(data, secret);
+  return `${data}.${signature}`;
+}
+
+export async function verify(token, secret) {
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    throw new Error('Invalid token format');
+  }
+
+  const [headerEncoded, payloadEncoded, signature] = parts;
+  const data = `${headerEncoded}.${payloadEncoded}`;
+
+  // Verify signature
+  const expectedSignature = await hmacSign(data, secret);
+  if (signature !== expectedSignature) {
+    throw new Error('Invalid signature');
+  }
+
+  // Decode payload
+  const payloadJson = decoder.decode(base64UrlDecode(payloadEncoded));
+  const payload = JSON.parse(payloadJson);
+
+  // Check expiration
+  if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+    throw new Error('Token expired');
+  }
+
+  return payload;
+}
+````
+
+## File: functions/api/products.js
+````javascript
+// Cloudflare Pages Functions - Products API
+// GET /api/products - List all products
+// GET /api/products/:slug - Get product by slug
+// POST /api/products - Create product (admin)
+// PUT /api/products/:id - Update product (admin)
+// DELETE /api/products/:id - Delete product (admin)
+
+import { verify } from './jwt-helper.js';
+
+const COOKIE_NAME = 'byahoa_auth';
+
+async function verifyAuth(request, env) {
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookies = Object.fromEntries(
+    cookieHeader.split(';').map(c => {
+      const [key, ...v] = c.trim().split('=');
+      return [key, v.join('=')];
+    })
+  );
+
+  const token = cookies[COOKIE_NAME];
+  if (!token) throw new Error('Unauthorized');
+
+  return await verify(token, env.JWT_SECRET || 'dev-secret');
+}
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
+
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders()
+  });
+}
+
+// GET /api/products or /api/products/:slug
+export async function onRequestGet(context) {
+  const { request, env, params } = context;
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+
+  try {
+    // Get product by slug: /api/products/:slug
+    if (pathParts.length > 2 && pathParts[2]) {
+      const slug = pathParts[2];
+      const product = await env.DB.prepare(
+        `SELECT p.*, c.name as category_name, c.slug as category_slug
+         FROM products p
+         JOIN categories c ON p.category_id = c.id
+         WHERE p.slug = ?`
+      ).bind(slug).first();
+
+      if (!product) {
+        return new Response(JSON.stringify({ error: 'Không tìm thấy sản phẩm' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+        });
+      }
+
+      return new Response(JSON.stringify(product), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    // List all products: /api/products
+    const categoryId = url.searchParams.get('category_id');
+    let query = `
+      SELECT p.*, c.name as category_name, c.slug as category_slug
+      FROM products p
+      JOIN categories c ON p.category_id = c.id
+    `;
+
+    if (categoryId) {
+      query += ` WHERE p.category_id = ?`;
+      const { results } = await env.DB.prepare(query + ' ORDER BY p.created_at DESC')
+        .bind(categoryId).all();
+      return new Response(JSON.stringify(results), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    const { results } = await env.DB.prepare(query + ' ORDER BY p.created_at DESC').all();
+    return new Response(JSON.stringify(results), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+
+// POST /api/products - Create product (admin only)
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  try {
+    await verifyAuth(request, env);
+
+    const { title, slug, category_id, description, image_url } = await request.json();
+
+    if (!title || !slug || !category_id) {
+      return new Response(JSON.stringify({ error: 'Thiếu thông tin bắt buộc' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    const result = await env.DB.prepare(
+      `INSERT INTO products (title, slug, category_id, description, image_url)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(title, slug, category_id, description, image_url).run();
+
+    return new Response(JSON.stringify({ success: true, id: result.meta.last_row_id }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.message === 'Unauthorized' ? 401 : 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+
+// PUT /api/products/:id - Update product (admin only)
+export async function onRequestPut(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  const id = pathParts[2];
+
+  try {
+    await verifyAuth(request, env);
+
+    const { title, slug, category_id, description, image_url } = await request.json();
+
+    await env.DB.prepare(
+      `UPDATE products
+       SET title = ?, slug = ?, category_id = ?, description = ?, image_url = ?
+       WHERE id = ?`
+    ).bind(title, slug, category_id, description, image_url, id).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.message === 'Unauthorized' ? 401 : 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+
+// DELETE /api/products/:id - Delete product (admin only)
+export async function onRequestDelete(context) {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  const id = pathParts[2];
+
+  try {
+    await verifyAuth(request, env);
+
+    await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.message === 'Unauthorized' ? 401 : 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+````
+
+## File: functions/api/upload.js
+````javascript
+// Cloudflare Pages Functions - Upload API
+// POST /api/upload - Upload image to R2 bucket (admin only)
+
+import { verify } from './jwt-helper.js';
+
+const COOKIE_NAME = 'byahoa_auth';
+
+async function verifyAuth(request, env) {
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookies = Object.fromEntries(
+    cookieHeader.split(';').map(c => {
+      const [key, ...v] = c.trim().split('=');
+      return [key, v.join('=')];
+    })
+  );
+
+  const token = cookies[COOKIE_NAME];
+  if (!token) throw new Error('Unauthorized');
+
+  return await verify(token, env.JWT_SECRET || 'dev-secret');
+}
+
+function corsHeaders() {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  };
+}
+
+export async function onRequestOptions() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders()
+  });
+}
+
+// POST /api/upload - Upload image to R2
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  try {
+    await verifyAuth(request, env);
+
+    const formData = await request.formData();
+    const file = formData.get('file');
+
+    if (!file) {
+      return new Response(JSON.stringify({ error: 'Không có file được upload' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!allowedTypes.includes(file.type)) {
+      return new Response(JSON.stringify({ error: 'Chỉ chấp nhận file ảnh (JPEG, PNG, WebP)' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return new Response(JSON.stringify({ error: 'File quá lớn (tối đa 5MB)' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+      });
+    }
+
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(7);
+    const extension = file.name.split('.').pop();
+    const filename = `${timestamp}-${randomStr}.${extension}`;
+    const key = `uploads/${filename}`;
+
+    // Upload to R2
+    await env.MEDIA_BUCKET.put(key, file.stream(), {
+      httpMetadata: {
+        contentType: file.type
+      }
+    });
+
+    // Construct public URL
+    const publicUrl = `${env.R2_PUBLIC_URL}/${key}`;
+
+    return new Response(JSON.stringify({
+      success: true,
+      url: publicUrl,
+      filename: filename
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: error.message === 'Unauthorized' ? 401 : 500,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders() }
+    });
+  }
+}
+````
+
+## File: public/images/.gitkeep
+````
+# Images directory
+````
+
+## File: public/_headers
+````
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+/api/*
+  Cache-Control: no-store, no-cache, must-revalidate
+  X-Robots-Tag: noindex
+
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store, no-cache, must-revalidate
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/images/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+````
+
+## File: public/_redirects
+````
+# Redirect www to non-www
+https://www.thocambyahoa.com/* https://thocambyahoa.com/:splat 301!
+
+# SPA fallback - all routes go to index.html
+/* /index.html 200
+````
+
+## File: public/favicon.svg
+````xml
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="#4A3728"/>
+  <text x="50" y="70" font-family="serif" font-size="60" font-weight="bold" fill="#E8DCC4" text-anchor="middle">B</text>
+</svg>
+````
+
+## File: public/manifest.json
+````json
+{
+  "name": "Thổ cẩm Bya Hoa",
+  "short_name": "Bya Hoa",
+  "description": "Thổ cẩm tơ tằm tự nhiên dệt thủ công - Nghệ thuật truyền thống Tây Nguyên",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF8",
+  "theme_color": "#4A3728",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+````
+
+## File: public/robots.txt
+````
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+
+Sitemap: https://thocambyahoa.com/sitemap.xml
+````
+
+## File: src/components/.gitkeep
+````
+# Components directory
+````
+
+## File: src/components/BlogCard.jsx
+````javascript
+import React from 'react';
+import { Link } from 'react-router-dom';
+
+export default function BlogCard({ blog }) {
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  return (
+    <Link
+      to={`/cau-chuyen/${blog.slug}`}
+      className="group block bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 fade-in"
+    >
+      {/* Blog Cover Image */}
+      <div className="relative aspect-video overflow-hidden bg-rustic-cream">
+        <img
+          src={blog.cover_image || '/images/placeholder-blog.jpg'}
+          alt={blog.title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
+        />
+      </div>
+
+      {/* Blog Info */}
+      <div className="p-5 sm:p-6">
+        {/* Date */}
+        <p className="text-xs sm:text-sm text-gray-500 mb-2">
+          {formatDate(blog.created_at)}
+        </p>
+
+        {/* Title */}
+        <h3 className="text-xl sm:text-2xl font-serif font-semibold text-rustic-dark mb-3 line-clamp-2 group-hover:text-rustic-brown transition-colors">
+          {blog.title}
+        </h3>
+
+        {/* Summary */}
+        {blog.summary && (
+          <p className="text-sm sm:text-base text-gray-600 line-clamp-3 mb-4">
+            {blog.summary}
+          </p>
+        )}
+
+        {/* Read More Link */}
+        <div className="flex items-center text-rustic-brown font-medium text-sm group-hover:underline">
+          Đọc tiếp
+          <svg
+            className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </div>
+      </div>
+    </Link>
+  );
+}
+````
+
+## File: src/components/ContactButtons.jsx
+````javascript
+import React from 'react';
+
+export default function ContactButtons() {
+  const zaloLink = 'https://zalo.me/0123456789'; // Replace with actual Zalo number
+  const phoneNumber = '0123456789'; // Replace with actual phone number
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg md:hidden">
+      <div className="grid grid-cols-2 gap-0">
+        {/* Zalo Button */}
+        <a
+          href={zaloLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center py-4 px-6 bg-blue-500 text-white font-medium hover:bg-blue-600 transition-colors active:bg-blue-700"
+        >
+          <svg
+            className="w-6 h-6 mr-2"
+            fill="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 2.237.738 4.304 1.986 5.972L2.05 21.95l4.014-1.95A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.838 0-3.535-.622-4.89-1.667l-.35-.269-3.634 1.764.935-3.467-.298-.378A7.952 7.952 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/>
+          </svg>
+          <span>Tư vấn Zalo</span>
+        </a>
+
+        {/* Call Button */}
+        <a
+          href={`tel:+84${phoneNumber.substring(1)}`}
+          className="flex items-center justify-center py-4 px-6 bg-earth-red text-white font-medium hover:bg-opacity-90 transition-colors active:bg-opacity-80"
+        >
+          <svg
+            className="w-6 h-6 mr-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+            />
+          </svg>
+          <span>Gọi Hotline</span>
+        </a>
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/components/Footer.jsx
+````javascript
+import React from 'react';
+
+export default function Footer() {
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <footer className="bg-rustic-dark text-rustic-cream">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+          {/* Company Info */}
+          <div>
+            <h3 className="text-2xl font-serif font-bold mb-4">Bya Hoa</h3>
+            <p className="text-sm text-rustic-beige mb-4">
+              Thổ cẩm tơ tằm tự nhiên dệt thủ công - Nghệ thuật truyền thống Tây Nguyên
+            </p>
+            <p className="text-sm text-rustic-beige">
+              Nghệ nhân: H'Kim Hoa Byă<br />
+              Dân tộc M'nông
+            </p>
+          </div>
+
+          {/* Contact Info */}
+          <div>
+            <h4 className="text-lg font-semibold mb-4">Liên hệ</h4>
+            <div className="space-y-2 text-sm text-rustic-beige">
+              <p>
+                <span className="font-medium">Địa chỉ:</span><br />
+                2A/10 Bùi Thị Xuân, Phường Buôn Ma Thuột,<br />
+                Tỉnh Đắk Lắk, Việt Nam
+              </p>
+              <p>
+                <span className="font-medium">Hotline:</span>{' '}
+                <a href="tel:+84123456789" className="hover:text-white transition-colors">
+                  0123 456 789
+                </a>
+              </p>
+              <p>
+                <span className="font-medium">Email:</span>{' '}
+                <a href="mailto:contact@thocambyahoa.com" className="hover:text-white transition-colors">
+                  contact@thocambyahoa.com
+                </a>
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Links */}
+          <div>
+            <h4 className="text-lg font-semibold mb-4">Liên kết</h4>
+            <ul className="space-y-2 text-sm text-rustic-beige">
+              <li>
+                <a href="/san-pham" className="hover:text-white transition-colors">
+                  Sản phẩm
+                </a>
+              </li>
+              <li>
+                <a href="/cau-chuyen" className="hover:text-white transition-colors">
+                  Câu chuyện thổ cẩm
+                </a>
+              </li>
+              <li>
+                <a href="/lien-he" className="hover:text-white transition-colors">
+                  Liên hệ tư vấn
+                </a>
+              </li>
+              <li>
+                <a href="/admin" className="hover:text-white transition-colors">
+                  Quản trị
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Legal Info */}
+        <div className="border-t border-rustic-brown pt-8">
+          <div className="text-xs text-rustic-beige space-y-1">
+            <p className="font-medium">CÔNG TY TNHH BYA HOA</p>
+            <p>Mã số thuế: 6001816916</p>
+            <p>Đại diện pháp luật: H'Kim Hoa Byă</p>
+            <p>Giấy chứng nhận đăng ký kinh doanh do Sở Kế hoạch và Đầu tư tỉnh Đắk Lắk cấp</p>
+          </div>
+        </div>
+
+        {/* Copyright */}
+        <div className="border-t border-rustic-brown mt-8 pt-8 text-center text-sm text-rustic-beige">
+          <p>© {currentYear} Bya Hoa. Bảo lưu mọi quyền.</p>
+          <p className="mt-2 text-xs">
+            Sản phẩm thổ cẩm thủ công - Mỗi sản phẩm là duy nhất
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+}
+````
+
+## File: src/components/Header.jsx
+````javascript
+import React, { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+
+export default function Header() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const location = useLocation();
+
+  const isActive = (path) => {
+    return location.pathname === path || location.pathname.startsWith(path + '/');
+  };
+
+  const navLinks = [
+    { path: '/', label: 'Trang chủ' },
+    { path: '/san-pham', label: 'Sản phẩm' },
+    { path: '/cau-chuyen', label: 'Câu chuyện' },
+    { path: '/lien-he', label: 'Liên hệ' },
+  ];
+
+  return (
+    <header className="bg-white shadow-sm sticky top-0 z-50">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16 sm:h-20">
+          {/* Logo */}
+          <Link to="/" className="flex items-center">
+            <h1 className="text-2xl sm:text-3xl font-serif font-bold text-rustic-brown">
+              Bya Hoa
+            </h1>
+          </Link>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden md:flex items-center space-x-8">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                className={`text-base font-medium transition-colors ${
+                  isActive(link.path)
+                    ? 'text-rustic-brown border-b-2 border-rustic-brown'
+                    : 'text-gray-700 hover:text-rustic-brown'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          {/* Mobile Menu Button */}
+          <button
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="md:hidden p-2 rounded-md text-rustic-brown hover:bg-rustic-cream transition-colors"
+            aria-label="Toggle menu"
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              {isMenuOpen ? (
+                <path d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+        </div>
+
+        {/* Mobile Navigation */}
+        {isMenuOpen && (
+          <nav className="md:hidden py-4 border-t border-gray-200">
+            {navLinks.map((link) => (
+              <Link
+                key={link.path}
+                to={link.path}
+                onClick={() => setIsMenuOpen(false)}
+                className={`block py-3 px-4 text-base font-medium transition-colors ${
+                  isActive(link.path)
+                    ? 'text-rustic-brown bg-rustic-cream'
+                    : 'text-gray-700 hover:bg-rustic-cream hover:text-rustic-brown'
+                }`}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        )}
+      </div>
+    </header>
+  );
+}
+````
+
+## File: src/components/ProductCard.jsx
+````javascript
+import React from 'react';
+import { Link } from 'react-router-dom';
+
+export default function ProductCard({ product }) {
+  return (
+    <Link
+      to={`/san-pham/${product.slug}`}
+      className="group block bg-white rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 fade-in"
+    >
+      {/* Product Image */}
+      <div className="relative aspect-square overflow-hidden bg-rustic-cream">
+        <img
+          src={product.image_url || '/images/placeholder-product.jpg'}
+          alt={product.title}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          loading="lazy"
+        />
+        {/* Category Badge */}
+        <div className="absolute top-3 left-3 bg-rustic-brown text-white text-xs px-3 py-1 rounded-full">
+          {product.category_name}
+        </div>
+      </div>
+
+      {/* Product Info */}
+      <div className="p-4 sm:p-5">
+        <h3 className="text-lg sm:text-xl font-serif font-semibold text-rustic-dark mb-2 line-clamp-2 group-hover:text-rustic-brown transition-colors">
+          {product.title}
+        </h3>
+
+        {product.description && (
+          <p className="text-sm text-gray-600 line-clamp-3 mb-3">
+            {product.description.split('\n')[0]}
+          </p>
+        )}
+
+        {/* View Details Link */}
+        <div className="flex items-center text-rustic-brown font-medium text-sm group-hover:underline">
+          Xem chi tiết
+          <svg
+            className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </div>
+      </div>
+    </Link>
+  );
+}
+````
+
+## File: src/pages/.gitkeep
+````
+# Pages directory
+````
+
+## File: src/pages/AdminDashboardPage.jsx
+````javascript
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { authAPI, productsAPI, blogsAPI, categoriesAPI, uploadAPI } from '../utils/api';
+import { generateSlug } from '../utils/seo';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
+
+export default function AdminDashboardPage() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('products'); // 'products' or 'blogs'
+  const navigate = useNavigate();
+
+  // Products state
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [productForm, setProductForm] = useState({
+    title: '',
+    slug: '',
+    category_id: '',
+    description: '',
+    image_url: ''
+  });
+
+  // Blogs state
+  const [blogs, setBlogs] = useState([]);
+  const [editingBlog, setEditingBlog] = useState(null);
+  const [blogForm, setBlogForm] = useState({
+    title: '',
+    slug: '',
+    summary: '',
+    content: '',
+    cover_image: ''
+  });
+
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    verifyAuth();
+  }, []);
+
+  const verifyAuth = async () => {
+    try {
+      const data = await authAPI.verify();
+      setUser(data.user);
+      await fetchData();
+    } catch (error) {
+      navigate('/admin');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchData = async () => {
+    try {
+      const [productsData, categoriesData, blogsData] = await Promise.all([
+        productsAPI.getAll(),
+        categoriesAPI.getAll(),
+        blogsAPI.getAll()
+      ]);
+      setProducts(productsData);
+      setCategories(categoriesData);
+      setBlogs(blogsData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+      navigate('/admin');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const handleImageUpload = async (e, formType) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const result = await uploadAPI.uploadImage(file);
+      if (formType === 'product') {
+        setProductForm({ ...productForm, image_url: result.url });
+      } else {
+        setBlogForm({ ...blogForm, cover_image: result.url });
+      }
+    } catch (error) {
+      alert('Upload thất bại: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Product handlers
+  const handleProductSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingProduct) {
+        await productsAPI.update(editingProduct.id, productForm);
+      } else {
+        await productsAPI.create(productForm);
+      }
+      await fetchData();
+      resetProductForm();
+      alert('Lưu sản phẩm thành công!');
+    } catch (error) {
+      alert('Lỗi: ' + error.message);
+    }
+  };
+
+  const handleProductEdit = (product) => {
+    setEditingProduct(product);
+    setProductForm({
+      title: product.title,
+      slug: product.slug,
+      category_id: product.category_id,
+      description: product.description || '',
+      image_url: product.image_url || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleProductDelete = async (id) => {
+    if (!confirm('Bạn có chắc muốn xóa sản phẩm này?')) return;
+    try {
+      await productsAPI.delete(id);
+      await fetchData();
+      alert('Xóa sản phẩm thành công!');
+    } catch (error) {
+      alert('Lỗi: ' + error.message);
+    }
+  };
+
+  const resetProductForm = () => {
+    setEditingProduct(null);
+    setProductForm({
+      title: '',
+      slug: '',
+      category_id: '',
+      description: '',
+      image_url: ''
+    });
+  };
+
+  // Blog handlers
+  const handleBlogSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingBlog) {
+        await blogsAPI.update(editingBlog.id, blogForm);
+      } else {
+        await blogsAPI.create(blogForm);
+      }
+      await fetchData();
+      resetBlogForm();
+      alert('Lưu bài viết thành công!');
+    } catch (error) {
+      alert('Lỗi: ' + error.message);
+    }
+  };
+
+  const handleBlogEdit = (blog) => {
+    setEditingBlog(blog);
+    setBlogForm({
+      title: blog.title,
+      slug: blog.slug,
+      summary: blog.summary || '',
+      content: blog.content || '',
+      cover_image: blog.cover_image || ''
+    });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBlogDelete = async (id) => {
+    if (!confirm('Bạn có chắc muốn xóa bài viết này?')) return;
+    try {
+      await blogsAPI.delete(id);
+      await fetchData();
+      alert('Xóa bài viết thành công!');
+    } catch (error) {
+      alert('Lỗi: ' + error.message);
+    }
+  };
+
+  const resetBlogForm = () => {
+    setEditingBlog(null);
+    setBlogForm({
+      title: '',
+      slug: '',
+      summary: '',
+      content: '',
+      cover_image: ''
+    });
+  };
+
+  const quillModules = {
+    toolbar: [
+      [{ 'header': [2, 3, false] }],
+      ['bold', 'italic', 'underline'],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      ['link'],
+      ['clean']
+    ]
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-serif font-bold text-rustic-brown">Quản trị Bya Hoa</h1>
+            <p className="text-sm text-gray-600">Xin chào, {user?.username}</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <a href="/" className="text-gray-600 hover:text-rustic-brown transition-colors">
+              Về trang chủ
+            </a>
+            <button
+              onClick={handleLogout}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Tabs */}
+      <div className="bg-white border-b">
+        <div className="container mx-auto px-4">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab('products')}
+              className={`px-6 py-3 font-medium transition-colors ${
+                activeTab === 'products'
+                  ? 'bg-rustic-brown text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Quản lý sản phẩm
+            </button>
+            <button
+              onClick={() => setActiveTab('blogs')}
+              className={`px-6 py-3 font-medium transition-colors ${
+                activeTab === 'blogs'
+                  ? 'bg-rustic-brown text-white'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Quản lý bài viết
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="container mx-auto px-4 py-8">
+        {activeTab === 'products' ? (
+          <div>
+            {/* Product Form */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-xl font-bold mb-4">
+                {editingProduct ? 'Sửa sản phẩm' : 'Thêm sản phẩm mới'}
+              </h2>
+              <form onSubmit={handleProductSubmit}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tên sản phẩm *</label>
+                    <input
+                      type="text"
+                      value={productForm.title}
+                      onChange={(e) => {
+                        const title = e.target.value;
+                        setProductForm({
+                          ...productForm,
+                          title,
+                          slug: generateSlug(title)
+                        });
+                      }}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Slug URL *</label>
+                    <input
+                      type="text"
+                      value={productForm.slug}
+                      onChange={(e) => setProductForm({ ...productForm, slug: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">Danh mục *</label>
+                  <select
+                    value={productForm.category_id}
+                    onChange={(e) => setProductForm({ ...productForm, category_id: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+                    required
+                  >
+                    <option value="">Chọn danh mục</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">Mô tả</label>
+                  <textarea
+                    value={productForm.description}
+                    onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+                    rows="6"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">Hình ảnh</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'product')}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    disabled={uploading}
+                  />
+                  {uploading && <p className="text-sm text-gray-600 mt-2">Đang upload...</p>}
+                  {productForm.image_url && (
+                    <img src={productForm.image_url} alt="Preview" className="mt-2 h-32 object-cover rounded" />
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="bg-rustic-brown text-white px-6 py-2 rounded-lg hover:bg-rustic-wood transition-colors"
+                  >
+                    {editingProduct ? 'Cập nhật' : 'Thêm mới'}
+                  </button>
+                  {editingProduct && (
+                    <button
+                      type="button"
+                      onClick={resetProductForm}
+                      className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                    >
+                      Hủy
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* Products List */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold mb-4">Danh sách sản phẩm ({products.length})</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4">Hình</th>
+                      <th className="text-left py-3 px-4">Tên sản phẩm</th>
+                      <th className="text-left py-3 px-4">Danh mục</th>
+                      <th className="text-right py-3 px-4">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map(product => (
+                      <tr key={product.id} className="border-b hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <img src={product.image_url || '/images/placeholder-product.jpg'} alt={product.title} className="w-16 h-16 object-cover rounded" />
+                        </td>
+                        <td className="py-3 px-4">{product.title}</td>
+                        <td className="py-3 px-4">{product.category_name}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => handleProductEdit(product)}
+                            className="text-blue-600 hover:underline mr-3"
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            onClick={() => handleProductDelete(product.id)}
+                            className="text-red-600 hover:underline"
+                          >
+                            Xóa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {/* Blog Form */}
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+              <h2 className="text-xl font-bold mb-4">
+                {editingBlog ? 'Sửa bài viết' : 'Thêm bài viết mới'}
+              </h2>
+              <form onSubmit={handleBlogSubmit}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tiêu đề *</label>
+                    <input
+                      type="text"
+                      value={blogForm.title}
+                      onChange={(e) => {
+                        const title = e.target.value;
+                        setBlogForm({
+                          ...blogForm,
+                          title,
+                          slug: generateSlug(title)
+                        });
+                      }}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Slug URL *</label>
+                    <input
+                      type="text"
+                      value={blogForm.slug}
+                      onChange={(e) => setBlogForm({ ...blogForm, slug: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">Tóm tắt</label>
+                  <textarea
+                    value={blogForm.summary}
+                    onChange={(e) => setBlogForm({ ...blogForm, summary: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+                    rows="3"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">Nội dung</label>
+                  <ReactQuill
+                    theme="snow"
+                    value={blogForm.content}
+                    onChange={(content) => setBlogForm({ ...blogForm, content })}
+                    modules={quillModules}
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium mb-2">Ảnh bìa</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleImageUpload(e, 'blog')}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    disabled={uploading}
+                  />
+                  {uploading && <p className="text-sm text-gray-600 mt-2">Đang upload...</p>}
+                  {blogForm.cover_image && (
+                    <img src={blogForm.cover_image} alt="Preview" className="mt-2 h-32 object-cover rounded" />
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="submit"
+                    className="bg-rustic-brown text-white px-6 py-2 rounded-lg hover:bg-rustic-wood transition-colors"
+                  >
+                    {editingBlog ? 'Cập nhật' : 'Thêm mới'}
+                  </button>
+                  {editingBlog && (
+                    <button
+                      type="button"
+                      onClick={resetBlogForm}
+                      className="bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition-colors"
+                    >
+                      Hủy
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* Blogs List */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h2 className="text-xl font-bold mb-4">Danh sách bài viết ({blogs.length})</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4">Ảnh bìa</th>
+                      <th className="text-left py-3 px-4">Tiêu đề</th>
+                      <th className="text-left py-3 px-4">Ngày tạo</th>
+                      <th className="text-right py-3 px-4">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {blogs.map(blog => (
+                      <tr key={blog.id} className="border-b hover:bg-gray-50">
+                        <td className="py-3 px-4">
+                          <img src={blog.cover_image || '/images/placeholder-blog.jpg'} alt={blog.title} className="w-16 h-16 object-cover rounded" />
+                        </td>
+                        <td className="py-3 px-4">{blog.title}</td>
+                        <td className="py-3 px-4">{new Date(blog.created_at).toLocaleDateString('vi-VN')}</td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => handleBlogEdit(blog)}
+                            className="text-blue-600 hover:underline mr-3"
+                          >
+                            Sửa
+                          </button>
+                          <button
+                            onClick={() => handleBlogDelete(blog.id)}
+                            className="text-red-600 hover:underline"
+                          >
+                            Xóa
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/pages/AdminLoginPage.jsx
+````javascript
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { authAPI } from '../utils/api';
+
+export default function AdminLoginPage() {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      await authAPI.login(username, password);
+      navigate('/admin/dashboard');
+    } catch (err) {
+      setError(err.message || 'Đăng nhập thất bại');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-rustic-brown via-rustic-wood to-rustic-beige flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-md">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-serif font-bold text-rustic-brown mb-2">
+            Bya Hoa
+          </h1>
+          <p className="text-gray-600">Quản trị viên</p>
+        </div>
+
+        {/* Login Form */}
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+            </div>
+          )}
+
+          <div className="mb-4">
+            <label htmlFor="username" className="block text-gray-700 font-medium mb-2">
+              Tên đăng nhập
+            </label>
+            <input
+              type="text"
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+              placeholder="admin@byahoa.com"
+              required
+              autoComplete="username"
+            />
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="password" className="block text-gray-700 font-medium mb-2">
+              Mật khẩu
+            </label>
+            <input
+              type="password"
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rustic-brown"
+              placeholder="••••••••"
+              required
+              autoComplete="current-password"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-rustic-brown text-white py-3 rounded-lg font-semibold hover:bg-rustic-wood transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
+          </button>
+        </form>
+
+        {/* Back to Home */}
+        <div className="mt-6 text-center">
+          <a href="/" className="text-sm text-gray-600 hover:text-rustic-brown transition-colors">
+            ← Về trang chủ
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/pages/BlogDetailPage.jsx
+````javascript
+import React, { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { blogsAPI } from '../utils/api';
+import { updateMetaTags, defaultSEO } from '../utils/seo';
+
+export default function BlogDetailPage() {
+  const { slug } = useParams();
+  const [blog, setBlog] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchBlog = async () => {
+      try {
+        const data = await blogsAPI.getBySlug(slug);
+        setBlog(data);
+
+        // Update SEO
+        updateMetaTags({
+          title: `${data.title} | ${defaultSEO.siteName}`,
+          description: data.summary || defaultSEO.defaultDescription,
+          image: data.cover_image || defaultSEO.defaultImage,
+          url: `${defaultSEO.siteUrl}/cau-chuyen/${data.slug}`
+        });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBlog();
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  if (error || !blog) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Không tìm thấy bài viết</h2>
+          <Link to="/cau-chuyen" className="text-rustic-brown hover:underline">
+            Quay lại danh sách bài viết
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Cover Image */}
+      {blog.cover_image && (
+        <div className="w-full h-64 sm:h-96 lg:h-[500px] overflow-hidden bg-rustic-cream">
+          <img
+            src={blog.cover_image}
+            alt={blog.title}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+
+      <article className="py-8 sm:py-12">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-4xl">
+          {/* Breadcrumb */}
+          <nav className="mb-6 text-sm">
+            <ol className="flex items-center space-x-2 text-gray-600">
+              <li>
+                <Link to="/" className="hover:text-rustic-brown">Trang chủ</Link>
+              </li>
+              <li>/</li>
+              <li>
+                <Link to="/cau-chuyen" className="hover:text-rustic-brown">Câu chuyện</Link>
+              </li>
+              <li>/</li>
+              <li className="text-rustic-brown font-medium truncate">{blog.title}</li>
+            </ol>
+          </nav>
+
+          {/* Article Header */}
+          <header className="mb-8">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-rustic-dark mb-4 leading-tight">
+              {blog.title}
+            </h1>
+
+            {blog.summary && (
+              <p className="text-lg sm:text-xl text-gray-600 mb-4 italic leading-relaxed">
+                {blog.summary}
+              </p>
+            )}
+
+            <div className="flex items-center text-sm text-gray-500 pt-4 border-t border-gray-200">
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <time dateTime={blog.created_at}>
+                {formatDate(blog.created_at)}
+              </time>
+              {blog.updated_at !== blog.created_at && (
+                <span className="ml-4 text-xs">
+                  (Cập nhật: {formatDate(blog.updated_at)})
+                </span>
+              )}
+            </div>
+          </header>
+
+          {/* Article Content */}
+          <div
+            className="blog-content"
+            dangerouslySetInnerHTML={{ __html: blog.content }}
+          />
+
+          {/* Share & Back to List */}
+          <div className="mt-12 pt-8 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <Link
+                to="/cau-chuyen"
+                className="inline-flex items-center text-rustic-brown hover:text-rustic-wood transition-colors font-medium"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Quay lại danh sách bài viết
+              </Link>
+
+              {/* Social Share Buttons */}
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-600">Chia sẻ:</span>
+                <a
+                  href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 flex items-center justify-center bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+                  aria-label="Chia sẻ lên Facebook"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                </a>
+                <a
+                  href={`https://twitter.com/intent/tweet?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(blog.title)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-10 h-10 flex items-center justify-center bg-sky-500 text-white rounded-full hover:bg-sky-600 transition-colors"
+                  aria-label="Chia sẻ lên Twitter"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                  </svg>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Contact CTA */}
+          <div className="mt-12 bg-rustic-cream rounded-lg p-6 sm:p-8 text-center">
+            <h3 className="text-xl sm:text-2xl font-serif font-bold text-rustic-dark mb-3">
+              Quan Tâm Đến Sản Phẩm Thổ Cẩm?
+            </h3>
+            <p className="text-gray-700 mb-5">
+              Liên hệ với chúng tôi để được tư vấn và khám phá bộ sưu tập đầy đủ
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                to="/san-pham"
+                className="bg-rustic-brown text-white px-8 py-3 rounded-lg font-semibold hover:bg-rustic-wood transition-colors"
+              >
+                Xem sản phẩm
+              </Link>
+              <a
+                href="https://zalo.me/0123456789"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-500 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+              >
+                Tư vấn qua Zalo
+              </a>
+            </div>
+          </div>
+        </div>
+      </article>
+    </div>
+  );
+}
+````
+
+## File: src/pages/BlogsPage.jsx
+````javascript
+import React, { useEffect, useState } from 'react';
+import { blogsAPI } from '../utils/api';
+import { updateMetaTags, defaultSEO } from '../utils/seo';
+import BlogCard from '../components/BlogCard';
+
+export default function BlogsPage() {
+  const [blogs, setBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Update SEO
+    updateMetaTags({
+      title: `Câu chuyện thổ cẩm | ${defaultSEO.siteName}`,
+      description: 'Khám phá câu chuyện văn hóa, nghệ thuật và tâm huyết đằng sau mỗi sản phẩm thổ cẩm Bya Hoa.',
+      url: `${defaultSEO.siteUrl}/cau-chuyen`
+    });
+
+    // Fetch blogs
+    const fetchBlogs = async () => {
+      try {
+        const data = await blogsAPI.getAll();
+        setBlogs(data);
+      } catch (error) {
+        console.error('Error fetching blogs:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBlogs();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8 sm:py-12">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-10 sm:mb-14">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-rustic-dark mb-4">
+            Câu Chuyện Thổ Cẩm
+          </h1>
+          <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+            Khám phá câu chuyện văn hóa, nghệ thuật dệt thổ cẩm và hành trình gìn giữ di sản Tây Nguyên
+          </p>
+        </div>
+
+        {/* Blogs Grid */}
+        {blogs.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">Chưa có bài viết nào</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {blogs.map((blog) => (
+              <BlogCard key={blog.id} blog={blog} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/pages/ContactPage.jsx
+````javascript
+import React, { useEffect } from 'react';
+import { updateMetaTags, defaultSEO } from '../utils/seo';
+
+export default function ContactPage() {
+  useEffect(() => {
+    updateMetaTags({
+      title: `Liên hệ | ${defaultSEO.siteName}`,
+      description: 'Liên hệ với Bya Hoa để được tư vấn về sản phẩm thổ cẩm tơ tằm cao cấp dệt thủ công.',
+      url: `${defaultSEO.siteUrl}/lien-he`
+    });
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8 sm:py-12">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-6xl">
+        {/* Header */}
+        <div className="text-center mb-10 sm:mb-14">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-rustic-dark mb-4">
+            Liên Hệ
+          </h1>
+          <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+            Chúng tôi luôn sẵn sàng tư vấn và hỗ trợ bạn
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+          {/* Contact Info */}
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg p-6 sm:p-8 shadow-md">
+              <h2 className="text-2xl font-serif font-bold text-rustic-dark mb-6">
+                Thông Tin Liên Hệ
+              </h2>
+
+              {/* Address */}
+              <div className="mb-6">
+                <div className="flex items-start">
+                  <svg className="w-6 h-6 text-rustic-brown mr-4 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <div>
+                    <h3 className="font-semibold text-rustic-dark mb-1">Địa chỉ</h3>
+                    <p className="text-gray-600">
+                      2A/10 Bùi Thị Xuân<br />
+                      Phường Buôn Ma Thuột<br />
+                      Tỉnh Đắk Lắk, Việt Nam
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Phone */}
+              <div className="mb-6">
+                <div className="flex items-start">
+                  <svg className="w-6 h-6 text-rustic-brown mr-4 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  <div>
+                    <h3 className="font-semibold text-rustic-dark mb-1">Hotline</h3>
+                    <a href="tel:+840123456789" className="text-rustic-brown hover:underline text-lg">
+                      0123 456 789
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Email */}
+              <div className="mb-6">
+                <div className="flex items-start">
+                  <svg className="w-6 h-6 text-rustic-brown mr-4 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                  <div>
+                    <h3 className="font-semibold text-rustic-dark mb-1">Email</h3>
+                    <a href="mailto:contact@thocambyahoa.com" className="text-rustic-brown hover:underline">
+                      contact@thocambyahoa.com
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* Working Hours */}
+              <div>
+                <div className="flex items-start">
+                  <svg className="w-6 h-6 text-rustic-brown mr-4 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <h3 className="font-semibold text-rustic-dark mb-1">Giờ làm việc</h3>
+                    <p className="text-gray-600">
+                      Thứ 2 - Thứ 7: 8:00 - 18:00<br />
+                      Chủ nhật: 8:00 - 12:00
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Contact Buttons */}
+            <div className="bg-rustic-brown text-white rounded-lg p-6 sm:p-8 shadow-md">
+              <h3 className="text-xl font-semibold mb-4">Liên hệ nhanh</h3>
+              <div className="space-y-3">
+                <a
+                  href="https://zalo.me/0123456789"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center bg-blue-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+                >
+                  <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.477 2 2 6.477 2 12c0 2.237.738 4.304 1.986 5.972L2.05 21.95l4.014-1.95A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.838 0-3.535-.622-4.89-1.667l-.35-.269-3.634 1.764.935-3.467-.298-.378A7.952 7.952 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/>
+                  </svg>
+                  Nhắn tin qua Zalo
+                </a>
+                <a
+                  href="https://www.facebook.com/byahoa"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                  </svg>
+                  Facebook Fanpage
+                </a>
+                <a
+                  href="tel:+840123456789"
+                  className="flex items-center justify-center bg-earth-red text-white px-6 py-3 rounded-lg font-semibold hover:bg-opacity-90 transition-colors"
+                >
+                  <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  Gọi điện thoại
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Map or Image */}
+          <div>
+            <div className="bg-white rounded-lg p-6 sm:p-8 shadow-md h-full">
+              <h2 className="text-2xl font-serif font-bold text-rustic-dark mb-6">
+                Về Bya Hoa
+              </h2>
+
+              <div className="prose prose-lg">
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  <strong>Bya Hoa</strong> là thương hiệu thổ cẩm tơ tằm cao cấp được thành lập
+                  bởi nghệ nhân H'Kim Hoa Byă - người phụ nữ M'nông tâm huyết với nghệ thuật
+                  dệt thổ cẩm truyền thống.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  Chúng tôi chuyên sản xuất các sản phẩm thổ cẩm dệt thủ công từ tơ tằm
+                  tự nhiên Bảo Lộc, kết hợp với các sợi tự nhiên như sợi gai, sợi tre,
+                  sợi cà phê để tạo nên những sản phẩm độc đáo, bền đẹp.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-6">
+                  Mỗi sản phẩm của Bya Hoa đều mang trong mình câu chuyện văn hóa Tây Nguyên
+                  và tâm hồn của người thợ dệt, là sự kết hợp hoàn hảo giữa truyền thống
+                  và hiện đại.
+                </p>
+
+                <div className="bg-rustic-cream rounded-lg p-4 mb-4">
+                  <h3 className="font-semibold text-rustic-dark mb-2">Thông tin doanh nghiệp</h3>
+                  <ul className="text-sm text-gray-700 space-y-1">
+                    <li>Công ty TNHH Bya Hoa</li>
+                    <li>Mã số thuế: 6001816916</li>
+                    <li>Đại diện: H'Kim Hoa Byă</li>
+                  </ul>
+                </div>
+
+                <p className="text-sm text-gray-600">
+                  Chúng tôi luôn sẵn sàng tư vấn và hỗ trợ quý khách. Đừng ngại liên hệ
+                  với chúng tôi qua các kênh trên để được tư vấn chi tiết nhất.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/pages/HomePage.jsx
+````javascript
+import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { productsAPI, blogsAPI } from '../utils/api';
+import { updateMetaTags, defaultSEO } from '../utils/seo';
+import ProductCard from '../components/ProductCard';
+import BlogCard from '../components/BlogCard';
+
+export default function HomePage() {
+  const [products, setProducts] = useState([]);
+  const [blogs, setBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Update SEO
+    updateMetaTags({
+      title: defaultSEO.defaultTitle,
+      description: defaultSEO.defaultDescription,
+      image: defaultSEO.defaultImage,
+      url: defaultSEO.siteUrl
+    });
+
+    // Fetch data
+    const fetchData = async () => {
+      try {
+        const [productsData, blogsData] = await Promise.all([
+          productsAPI.getAll(),
+          blogsAPI.getAll(3)
+        ]);
+        setProducts(productsData.slice(0, 6));
+        setBlogs(blogsData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen">
+      {/* Hero Section */}
+      <section className="relative bg-gradient-to-br from-rustic-brown via-rustic-wood to-rustic-beige text-white py-16 sm:py-24 lg:py-32">
+        <div className="absolute inset-0 bg-black opacity-20"></div>
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="max-w-3xl mx-auto text-center">
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold mb-6 leading-tight">
+              Hồi Sinh Hoa Văn Cổ<br />
+              Dệt Từ Lụa Tơ Tằm và Sợi Tự Nhiên Tây Nguyên
+            </h1>
+            <p className="text-base sm:text-lg lg:text-xl mb-8 text-rustic-cream leading-relaxed">
+              Nghệ nhân H'Kim Hoa Byă dân tộc M'nông tái hiện nghệ thuật dệt thổ cẩm truyền thống
+              với chất liệu tơ tằm cao cấp, mang đến sản phẩm độc đáo và tinh tế.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Link
+                to="/san-pham"
+                className="bg-white text-rustic-brown px-8 py-3 rounded-lg font-semibold hover:bg-rustic-cream transition-colors shadow-lg"
+              >
+                Khám phá sản phẩm
+              </Link>
+              <Link
+                to="/cau-chuyen"
+                className="bg-transparent border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-rustic-brown transition-colors"
+              >
+                Đọc câu chuyện
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Uniqueness Section */}
+      <section className="py-12 sm:py-16 lg:py-20 bg-white">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-center text-rustic-dark mb-8 sm:mb-12">
+              Nét Đẹp Khác Biệt
+            </h2>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* M'nông Style */}
+              <div className="bg-rustic-cream p-6 sm:p-8 rounded-lg">
+                <h3 className="text-xl sm:text-2xl font-serif font-semibold text-rustic-brown mb-4">
+                  Thổ Cẩm M'nông
+                </h3>
+                <p className="text-gray-700 leading-relaxed mb-4">
+                  Hơi thở của rừng xanh với họa tiết mềm mại, đa sắc độ. Màu sắc hài hòa như đất,
+                  lá, gỗ - thể hiện sự gần gũi với thiên nhiên Tây Nguyên.
+                </p>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li>✦ Họa tiết cong mượt, dịu dàng</li>
+                  <li>✦ Màu sắc chuyển sắc nhẹ nhàng</li>
+                  <li>✦ Gần gũi, phù hợp hàng ngày</li>
+                </ul>
+              </div>
+
+              {/* Ê-đê Style */}
+              <div className="bg-indigo-deep text-white p-6 sm:p-8 rounded-lg">
+                <h3 className="text-xl sm:text-2xl font-serif font-semibold mb-4">
+                  Thổ Cẩm Ê-đê
+                </h3>
+                <p className="text-rustic-cream leading-relaxed mb-4">
+                  Khí phách cao nguyên với họa tiết hình học sắc sảo, màu sắc tương phản mạnh mẽ.
+                  Thể hiện tính cách cương trực và gan dạ.
+                </p>
+                <ul className="space-y-2 text-sm text-rustic-beige">
+                  <li>✦ Hình học: tam giác, zigzag</li>
+                  <li>✦ Tương phản rõ rệt</li>
+                  <li>✦ Mạnh mẽ, sang trọng</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Featured Products */}
+      <section className="py-12 sm:py-16 lg:py-20 bg-gray-50">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-rustic-dark mb-4">
+              Sản Phẩm Nổi Bật
+            </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Mỗi sản phẩm là duy nhất, được dệt thủ công với tâm huyết và kỹ thuật truyền thống
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-8">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+
+          <div className="text-center">
+            <Link
+              to="/san-pham"
+              className="inline-block bg-rustic-brown text-white px-8 py-3 rounded-lg font-semibold hover:bg-rustic-wood transition-colors"
+            >
+              Xem tất cả sản phẩm
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Latest Blogs */}
+      <section className="py-12 sm:py-16 lg:py-20 bg-white">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-rustic-dark mb-4">
+              Câu Chuyện Thổ Cẩm
+            </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              Khám phá câu chuyện văn hóa, nghệ thuật và tâm huyết đằng sau mỗi sản phẩm
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 mb-8">
+            {blogs.map((blog) => (
+              <BlogCard key={blog.id} blog={blog} />
+            ))}
+          </div>
+
+          <div className="text-center">
+            <Link
+              to="/cau-chuyen"
+              className="inline-block bg-rustic-brown text-white px-8 py-3 rounded-lg font-semibold hover:bg-rustic-wood transition-colors"
+            >
+              Đọc thêm câu chuyện
+            </Link>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+````
+
+## File: src/pages/ProductDetailPage.jsx
+````javascript
+import React, { useEffect, useState } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { productsAPI } from '../utils/api';
+import { updateMetaTags, defaultSEO } from '../utils/seo';
+
+export default function ProductDetailPage() {
+  const { slug } = useParams();
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const data = await productsAPI.getBySlug(slug);
+        setProduct(data);
+
+        // Update SEO
+        updateMetaTags({
+          title: `${data.title} | ${defaultSEO.siteName}`,
+          description: data.description?.substring(0, 160) || defaultSEO.defaultDescription,
+          image: data.image_url || defaultSEO.defaultImage,
+          url: `${defaultSEO.siteUrl}/san-pham/${data.slug}`
+        });
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [slug]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Không tìm thấy sản phẩm</h2>
+          <Link to="/san-pham" className="text-rustic-brown hover:underline">
+            Quay lại danh sách sản phẩm
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-white py-8 sm:py-12 pb-24 md:pb-12">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Breadcrumb */}
+        <nav className="mb-6 sm:mb-8 text-sm">
+          <ol className="flex items-center space-x-2 text-gray-600">
+            <li>
+              <Link to="/" className="hover:text-rustic-brown">Trang chủ</Link>
+            </li>
+            <li>/</li>
+            <li>
+              <Link to="/san-pham" className="hover:text-rustic-brown">Sản phẩm</Link>
+            </li>
+            <li>/</li>
+            <li className="text-rustic-brown font-medium truncate">{product.title}</li>
+          </ol>
+        </nav>
+
+        {/* Product Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+          {/* Product Image */}
+          <div className="order-1">
+            <div className="sticky top-24">
+              <div className="relative aspect-square rounded-lg overflow-hidden bg-rustic-cream shadow-lg">
+                <img
+                  src={product.image_url || '/images/placeholder-product.jpg'}
+                  alt={product.title}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Product Info */}
+          <div className="order-2">
+            {/* Category Badge */}
+            <div className="inline-block bg-rustic-cream text-rustic-brown text-sm px-4 py-2 rounded-full mb-4">
+              {product.category_name}
+            </div>
+
+            {/* Product Title */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-rustic-dark mb-6 leading-tight">
+              {product.title}
+            </h1>
+
+            {/* Product Description */}
+            <div className="prose prose-lg max-w-none mb-8">
+              {product.description?.split('\n\n').map((paragraph, index) => (
+                <p key={index} className="text-gray-700 leading-relaxed mb-4 whitespace-pre-line">
+                  {paragraph}
+                </p>
+              ))}
+            </div>
+
+            {/* Features/Highlights */}
+            <div className="bg-rustic-cream rounded-lg p-6 mb-8">
+              <h3 className="text-xl font-semibold text-rustic-dark mb-4">
+                Đặc điểm nổi bật
+              </h3>
+              <ul className="space-y-2 text-gray-700">
+                <li className="flex items-start">
+                  <span className="text-rustic-brown mr-2">✦</span>
+                  Dệt thủ công 100% từ sợi tự nhiên
+                </li>
+                <li className="flex items-start">
+                  <span className="text-rustic-brown mr-2">✦</span>
+                  Chất liệu tơ tằm cao cấp, mềm mại
+                </li>
+                <li className="flex items-start">
+                  <span className="text-rustic-brown mr-2">✦</span>
+                  Họa tiết truyền thống Tây Nguyên
+                </li>
+                <li className="flex items-start">
+                  <span className="text-rustic-brown mr-2">✦</span>
+                  Mỗi sản phẩm là duy nhất
+                </li>
+              </ul>
+            </div>
+
+            {/* Desktop Contact Buttons */}
+            <div className="hidden md:block">
+              <h3 className="text-lg font-semibold text-rustic-dark mb-4">
+                Liên hệ để được tư vấn và đặt hàng
+              </h3>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <a
+                  href="https://zalo.me/0123456789"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 bg-blue-500 text-white px-8 py-4 rounded-lg font-semibold hover:bg-blue-600 transition-colors text-center shadow-lg"
+                >
+                  <svg className="w-6 h-6 inline-block mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.477 2 2 6.477 2 12c0 2.237.738 4.304 1.986 5.972L2.05 21.95l4.014-1.95A9.954 9.954 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.838 0-3.535-.622-4.89-1.667l-.35-.269-3.634 1.764.935-3.467-.298-.378A7.952 7.952 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/>
+                  </svg>
+                  Tư vấn qua Zalo
+                </a>
+                <a
+                  href="tel:+840123456789"
+                  className="flex-1 bg-earth-red text-white px-8 py-4 rounded-lg font-semibold hover:bg-opacity-90 transition-colors text-center shadow-lg"
+                >
+                  <svg className="w-6 h-6 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                  Gọi Hotline
+                </a>
+              </div>
+            </div>
+
+            {/* Additional Info */}
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                <strong>Lưu ý:</strong> Sản phẩm dệt thủ công nên có thể có chênh lệch nhỏ về kích thước và màu sắc so với hình ảnh.
+                Điều này làm nên sự độc đáo của mỗi sản phẩm.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/pages/ProductsPage.jsx
+````javascript
+import React, { useEffect, useState } from 'react';
+import { productsAPI, categoriesAPI } from '../utils/api';
+import { updateMetaTags, defaultSEO } from '../utils/seo';
+import ProductCard from '../components/ProductCard';
+
+export default function ProductsPage() {
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Update SEO
+    updateMetaTags({
+      title: `Sản phẩm thổ cẩm | ${defaultSEO.siteName}`,
+      description: 'Khám phá bộ sưu tập túi xách và khăn choàng thổ cẩm tơ tằm cao cấp, dệt thủ công bởi nghệ nhân H\'Kim Hoa Byă.',
+      url: `${defaultSEO.siteUrl}/san-pham`
+    });
+
+    // Fetch data
+    const fetchData = async () => {
+      try {
+        const [productsData, categoriesData] = await Promise.all([
+          productsAPI.getAll(),
+          categoriesAPI.getAll()
+        ]);
+        setProducts(productsData);
+        setCategories(categoriesData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const handleCategoryChange = async (categoryId) => {
+    setSelectedCategory(categoryId);
+    setLoading(true);
+    try {
+      const data = categoryId ? await productsAPI.getAll(categoryId) : await productsAPI.getAll();
+      setProducts(data);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading && products.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-8 sm:py-12">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-8 sm:mb-12">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-bold text-rustic-dark mb-4">
+            Sản Phẩm Thổ Cẩm
+          </h1>
+          <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto">
+            Mỗi sản phẩm là một tác phẩm nghệ thuật độc đáo, dệt thủ công từ tơ tằm tự nhiên
+          </p>
+        </div>
+
+        {/* Category Filter */}
+        <div className="mb-8 sm:mb-10">
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
+            <button
+              onClick={() => handleCategoryChange(null)}
+              className={`px-5 sm:px-6 py-2 sm:py-3 rounded-full font-medium transition-colors ${
+                selectedCategory === null
+                  ? 'bg-rustic-brown text-white shadow-md'
+                  : 'bg-white text-gray-700 hover:bg-rustic-cream border border-gray-300'
+              }`}
+            >
+              Tất cả
+            </button>
+            {categories.map((category) => (
+              <button
+                key={category.id}
+                onClick={() => handleCategoryChange(category.id)}
+                className={`px-5 sm:px-6 py-2 sm:py-3 rounded-full font-medium transition-colors ${
+                  selectedCategory === category.id
+                    ? 'bg-rustic-brown text-white shadow-md'
+                    : 'bg-white text-gray-700 hover:bg-rustic-cream border border-gray-300'
+                }`}
+              >
+                {category.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Products Grid */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="spinner"></div>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 text-lg">Chưa có sản phẩm nào trong danh mục này</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        )}
+
+        {/* Contact CTA */}
+        <div className="mt-12 sm:mt-16 bg-rustic-cream rounded-lg p-8 sm:p-10 text-center">
+          <h3 className="text-2xl sm:text-3xl font-serif font-bold text-rustic-dark mb-4">
+            Không Tìm Thấy Sản Phẩm Phù Hợp?
+          </h3>
+          <p className="text-gray-700 mb-6 max-w-2xl mx-auto">
+            Chúng tôi có thể tạo sản phẩm đặc biệt theo yêu cầu của bạn. Liên hệ để được tư vấn chi tiết.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a
+              href="https://zalo.me/0123456789"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-blue-500 text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-600 transition-colors"
+            >
+              Tư vấn qua Zalo
+            </a>
+            <a
+              href="tel:+840123456789"
+              className="bg-rustic-brown text-white px-8 py-3 rounded-lg font-semibold hover:bg-rustic-wood transition-colors"
+            >
+              Gọi Hotline
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+````
+
+## File: src/styles/.gitkeep
+````
+# Styles directory
+````
+
+## File: src/utils/.gitkeep
+````
+# Utils directory
+````
+
+## File: src/utils/api.js
+````javascript
+// API Client utility functions
+
+const API_BASE = '/api';
+
+export async function apiRequest(endpoint, options = {}) {
+  const url = `${API_BASE}${endpoint}`;
+
+  const config = {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  };
+
+  if (options.body && typeof options.body === 'object') {
+    config.body = JSON.stringify(options.body);
+  }
+
+  const response = await fetch(url, config);
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Request failed');
+  }
+
+  return data;
+}
+
+// Auth API
+export const authAPI = {
+  login: (username, password) =>
+    apiRequest('/auth', {
+      method: 'POST',
+      body: { username, password },
+    }),
+
+  logout: () =>
+    apiRequest('/auth/logout', { method: 'POST' }),
+
+  verify: () =>
+    apiRequest('/auth/verify'),
+};
+
+// Products API
+export const productsAPI = {
+  getAll: (categoryId) => {
+    const query = categoryId ? `?category_id=${categoryId}` : '';
+    return apiRequest(`/products${query}`);
+  },
+
+  getBySlug: (slug) =>
+    apiRequest(`/products/${slug}`),
+
+  create: (data) =>
+    apiRequest('/products', {
+      method: 'POST',
+      body: data,
+    }),
+
+  update: (id, data) =>
+    apiRequest(`/products/${id}`, {
+      method: 'PUT',
+      body: data,
+    }),
+
+  delete: (id) =>
+    apiRequest(`/products/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Blogs API
+export const blogsAPI = {
+  getAll: (limit) => {
+    const query = limit ? `?limit=${limit}` : '';
+    return apiRequest(`/blogs${query}`);
+  },
+
+  getBySlug: (slug) =>
+    apiRequest(`/blogs/${slug}`),
+
+  create: (data) =>
+    apiRequest('/blogs', {
+      method: 'POST',
+      body: data,
+    }),
+
+  update: (id, data) =>
+    apiRequest(`/blogs/${id}`, {
+      method: 'PUT',
+      body: data,
+    }),
+
+  delete: (id) =>
+    apiRequest(`/blogs/${id}`, {
+      method: 'DELETE',
+    }),
+};
+
+// Categories API
+export const categoriesAPI = {
+  getAll: () => apiRequest('/categories'),
+};
+
+// Upload API
+export const uploadAPI = {
+  uploadImage: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_BASE}/upload`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Upload failed');
+    }
+
+    return data;
+  },
+};
+````
+
+## File: src/utils/seo.js
+````javascript
+// SEO Helper - Auto generate meta tags and slugs
+
+export function generateSlug(text) {
+  const vietnameseMap = {
+    'à': 'a', 'á': 'a', 'ạ': 'a', 'ả': 'a', 'ã': 'a', 'â': 'a', 'ầ': 'a', 'ấ': 'a', 'ậ': 'a', 'ẩ': 'a', 'ẫ': 'a', 'ă': 'a', 'ằ': 'a', 'ắ': 'a', 'ặ': 'a', 'ẳ': 'a', 'ẵ': 'a',
+    'è': 'e', 'é': 'e', 'ẹ': 'e', 'ẻ': 'e', 'ẽ': 'e', 'ê': 'e', 'ề': 'e', 'ế': 'e', 'ệ': 'e', 'ể': 'e', 'ễ': 'e',
+    'ì': 'i', 'í': 'i', 'ị': 'i', 'ỉ': 'i', 'ĩ': 'i',
+    'ò': 'o', 'ó': 'o', 'ọ': 'o', 'ỏ': 'o', 'õ': 'o', 'ô': 'o', 'ồ': 'o', 'ố': 'o', 'ộ': 'o', 'ổ': 'o', 'ỗ': 'o', 'ơ': 'o', 'ờ': 'o', 'ớ': 'o', 'ợ': 'o', 'ở': 'o', 'ỡ': 'o',
+    'ù': 'u', 'ú': 'u', 'ụ': 'u', 'ủ': 'u', 'ũ': 'u', 'ư': 'u', 'ừ': 'u', 'ứ': 'u', 'ự': 'u', 'ử': 'u', 'ữ': 'u',
+    'ỳ': 'y', 'ý': 'y', 'ỵ': 'y', 'ỷ': 'y', 'ỹ': 'y',
+    'đ': 'd',
+    'À': 'A', 'Á': 'A', 'Ạ': 'A', 'Ả': 'A', 'Ã': 'A', 'Â': 'A', 'Ầ': 'A', 'Ấ': 'A', 'Ậ': 'A', 'Ẩ': 'A', 'Ẫ': 'A', 'Ă': 'A', 'Ằ': 'A', 'Ắ': 'A', 'Ặ': 'A', 'Ẳ': 'A', 'Ẵ': 'A',
+    'È': 'E', 'É': 'E', 'Ẹ': 'E', 'Ẻ': 'E', 'Ẽ': 'E', 'Ê': 'E', 'Ề': 'E', 'Ế': 'E', 'Ệ': 'E', 'Ể': 'E', 'Ễ': 'E',
+    'Ì': 'I', 'Í': 'I', 'Ị': 'I', 'Ỉ': 'I', 'Ĩ': 'I',
+    'Ò': 'O', 'Ó': 'O', 'Ọ': 'O', 'Ỏ': 'O', 'Õ': 'O', 'Ô': 'O', 'Ồ': 'O', 'Ố': 'O', 'Ộ': 'O', 'Ổ': 'O', 'Ỗ': 'O', 'Ơ': 'O', 'Ờ': 'O', 'Ớ': 'O', 'Ợ': 'O', 'Ở': 'O', 'Ỡ': 'O',
+    'Ù': 'U', 'Ú': 'U', 'Ụ': 'U', 'Ủ': 'U', 'Ũ': 'U', 'Ư': 'U', 'Ừ': 'U', 'Ứ': 'U', 'Ự': 'U', 'Ử': 'U', 'Ữ': 'U',
+    'Ỳ': 'Y', 'Ý': 'Y', 'Ỵ': 'Y', 'Ỷ': 'Y', 'Ỹ': 'Y',
+    'Đ': 'D'
+  };
+
+  let slug = text.toLowerCase().trim();
+
+  // Replace Vietnamese characters
+  for (const [key, value] of Object.entries(vietnameseMap)) {
+    slug = slug.replace(new RegExp(key, 'g'), value);
+  }
+
+  // Remove special characters and replace spaces with hyphens
+  slug = slug
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+
+  return slug;
+}
+
+export function updateMetaTags({ title, description, image, url }) {
+  // Update page title
+  if (title) {
+    document.title = title;
+  }
+
+  // Update or create meta tags
+  const metaTags = {
+    'description': description,
+    'og:title': title,
+    'og:description': description,
+    'og:image': image,
+    'og:url': url,
+    'og:type': 'website',
+    'twitter:card': 'summary_large_image',
+    'twitter:title': title,
+    'twitter:description': description,
+    'twitter:image': image,
+  };
+
+  Object.entries(metaTags).forEach(([name, content]) => {
+    if (!content) return;
+
+    const property = name.startsWith('og:') || name.startsWith('twitter:') ? 'property' : 'name';
+    let meta = document.querySelector(`meta[${property}="${name}"]`);
+
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute(property, name);
+      document.head.appendChild(meta);
+    }
+
+    meta.setAttribute('content', content);
+  });
+}
+
+export const defaultSEO = {
+  siteName: 'Thổ cẩm Bya Hoa',
+  defaultTitle: 'Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên',
+  defaultDescription: 'Thổ cẩm Bya Hoa - Sản phẩm thổ cẩm tơ tằm tự nhiên dệt thủ công bởi nghệ nhân H\'Kim Hoa Byă. Túi xách, khăn choàng thổ cẩm cao cấp với họa tiết M\'nông và Ê-đê truyền thống.',
+  siteUrl: 'https://thocambyahoa.com',
+  defaultImage: '/images/og-default.jpg'
+};
+````
+
+## File: src/App.jsx
+````javascript
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import ContactButtons from './components/ContactButtons';
+import HomePage from './pages/HomePage';
+import ProductsPage from './pages/ProductsPage';
+import ProductDetailPage from './pages/ProductDetailPage';
+import BlogsPage from './pages/BlogsPage';
+import BlogDetailPage from './pages/BlogDetailPage';
+import ContactPage from './pages/ContactPage';
+import AdminLoginPage from './pages/AdminLoginPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
+import './styles/index.css';
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* Admin Routes - No Header/Footer */}
+        <Route path="/admin" element={<AdminLoginPage />} />
+        <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+
+        {/* Public Routes - With Header/Footer */}
+        <Route
+          path="/*"
+          element={
+            <div className="flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-grow">
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/san-pham" element={<ProductsPage />} />
+                  <Route path="/san-pham/:slug" element={<ProductDetailPage />} />
+                  <Route path="/cau-chuyen" element={<BlogsPage />} />
+                  <Route path="/cau-chuyen/:slug" element={<BlogDetailPage />} />
+                  <Route path="/lien-he" element={<ContactPage />} />
+                </Routes>
+              </main>
+              <ContactButtons />
+              <Footer />
+            </div>
+          }
+        />
+      </Routes>
+    </Router>
+  );
+}
+
+export default App;
+````
+
+## File: .env.example
+````
+# Cloudflare Pages Environment Variables
+# Copy file này thành .env.local để test local (không commit .env.local)
+
+# JWT Secret - Dùng để ký JWT tokens
+# Tạo bằng: openssl rand -base64 32
+JWT_SECRET=your-random-jwt-secret-here-change-this
+
+# Admin Username
+ADMIN_USERNAME=admin@byahoa.com
+
+# Admin Password Hash - SHA-256 hash của mật khẩu
+# Tạo bằng: echo -n "YOUR_PASSWORD" | openssl dgst -sha256
+# Hoặc dùng script: ./create-password-hash.sh
+ADMIN_PASSWORD_HASH=your-password-hash-here
+
+# R2 Public URL - URL công khai của R2 bucket
+# Ví dụ: https://media.thocambyahoa.com
+# Hoặc: https://pub-xxxxx.r2.dev
+R2_PUBLIC_URL=https://media.thocambyahoa.com
+
+# ===================================================
+# LƯU Ý:
+# - File .env.local chỉ dùng cho development local
+# - KHÔNG commit file .env.local vào Git
+# - Production environment variables cấu hình trên Cloudflare Dashboard
+# - Xem DEPLOYMENT.md để biết cách cấu hình trên Cloudflare
+# ===================================================
+````
+
+## File: .gitignore
+````
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Production
+dist
+build
+
+# Local env files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Wrangler
+.wrangler
+.dev.vars
+wrangler.toml.backup
+
+# Cloudflare
+.cloudflare
+````
+
+## File: .gitkeep
+````
+# Project structure placeholder
+````
+
+## File: check-project.sh
+````bash
+#!/bin/bash
+
+# Script kiểm tra dự án đã sẵn sàng chưa
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  KIỂM TRA DỰ ÁN THỔ CẨM BYA HOA"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+
+# Kiểm tra Node.js
+echo "✓ Kiểm tra Node.js..."
+if command -v node &> /dev/null; then
+    NODE_VERSION=$(node --version)
+    echo "  Node.js: $NODE_VERSION"
+else
+    echo "  ✗ Node.js chưa được cài đặt!"
+    echo "    Cài đặt: https://nodejs.org"
+fi
+echo ""
+
+# Kiểm tra npm
+echo "✓ Kiểm tra npm..."
+if command -v npm &> /dev/null; then
+    NPM_VERSION=$(npm --version)
+    echo "  npm: v$NPM_VERSION"
+else
+    echo "  ✗ npm chưa được cài đặt!"
+fi
+echo ""
+
+# Kiểm tra Wrangler
+echo "✓ Kiểm tra Wrangler CLI..."
+if command -v wrangler &> /dev/null; then
+    WRANGLER_VERSION=$(wrangler --version)
+    echo "  Wrangler: $WRANGLER_VERSION"
+else
+    echo "  ✗ Wrangler chưa được cài đặt!"
+    echo "    Cài đặt: npm install -g wrangler"
+fi
+echo ""
+
+# Kiểm tra files quan trọng
+echo "✓ Kiểm tra files quan trọng..."
+FILES=(
+    "package.json"
+    "schema.sql"
+    "wrangler.toml"
+    "index.html"
+    "src/App.jsx"
+    "src/main.jsx"
+    "functions/api/auth.js"
+    "functions/api/products.js"
+    "functions/api/blogs.js"
+)
+
+ALL_EXIST=true
+for file in "${FILES[@]}"; do
+    if [ -f "$file" ]; then
+        echo "  ✓ $file"
+    else
+        echo "  ✗ $file (KHÔNG TÌM THẤY)"
+        ALL_EXIST=false
+    fi
+done
+echo ""
+
+# Kiểm tra node_modules
+echo "✓ Kiểm tra dependencies..."
+if [ -d "node_modules" ]; then
+    echo "  ✓ node_modules đã được cài đặt"
+else
+    echo "  ✗ node_modules chưa được cài đặt"
+    echo "    Chạy: npm install"
+fi
+echo ""
+
+# Kiểm tra .env.example
+echo "✓ Kiểm tra cấu hình..."
+if [ -f ".env.example" ]; then
+    echo "  ✓ .env.example tồn tại"
+else
+    echo "  ✗ .env.example không tồn tại"
+fi
+echo ""
+
+# Tổng kết
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  TỔNG KẾT"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ "$ALL_EXIST" = true ]; then
+    echo ""
+    echo "✅ Dự án đã sẵn sàng!"
+    echo ""
+    echo "CÁC BƯỚC TIẾP THEO:"
+    echo "1. Cài đặt dependencies: npm install"
+    echo "2. Tạo password hash: ./create-password-hash.sh"
+    echo "3. Setup Cloudflare D1 & R2"
+    echo "4. Build: npm run build"
+    echo "5. Deploy: npm run deploy"
+    echo ""
+    echo "Chi tiết xem: DEPLOYMENT.md"
+else
+    echo ""
+    echo "⚠️  Có một số files quan trọng bị thiếu!"
+    echo "    Kiểm tra lại dự án."
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+````
+
+## File: CHECKLIST.md
+````markdown
+# Checklist trước khi Deploy Production
+
+## 1. Cấu hình Cơ bản
+- [ ] Đã cài đặt Node.js (v18+)
+- [ ] Đã cài đặt Wrangler CLI (`npm install -g wrangler`)
+- [ ] Đã đăng nhập Cloudflare (`wrangler login`)
+- [ ] Đã có tài khoản Cloudflare
+
+## 2. Database (D1)
+- [ ] Đã tạo D1 database (`wrangler d1 create byahoa-db`)
+- [ ] Đã cập nhật `database_id` trong `wrangler.toml`
+- [ ] Đã chạy migration (`wrangler d1 execute byahoa-db --file=./schema.sql`)
+- [ ] Đã kiểm tra data seed (`wrangler d1 execute byahoa-db --command="SELECT * FROM products"`)
+
+## 3. Storage (R2)
+- [ ] Đã tạo R2 bucket (`wrangler r2 bucket create byahoa-media`)
+- [ ] Đã cấu hình CORS (`wrangler r2 bucket cors put byahoa-media --cors-config cors.json`)
+- [ ] Đã enable public access hoặc custom domain cho R2
+- [ ] Đã cập nhật `R2_PUBLIC_URL` trong `wrangler.toml`
+
+## 4. Authentication
+- [ ] Đã tạo password hash (`./create-password-hash.sh` hoặc `openssl dgst -sha256`)
+- [ ] Đã cập nhật `ADMIN_PASSWORD_HASH` trong `wrangler.toml`
+- [ ] Đã tạo `JWT_SECRET` ngẫu nhiên (`openssl rand -base64 32`)
+- [ ] Đã cập nhật `ADMIN_USERNAME` (email admin)
+
+## 5. Nội dung
+- [ ] Đã cập nhật số điện thoại thật trong `ContactButtons.jsx`
+- [ ] Đã cập nhật link Zalo thật trong `ContactButtons.jsx`
+- [ ] Đã cập nhật thông tin liên hệ trong `ContactPage.jsx`
+- [ ] Đã cập nhật thông tin pháp lý trong `Footer.jsx`
+- [ ] Đã kiểm tra tất cả link social media
+
+## 6. SEO & Meta
+- [ ] Đã cập nhật domain trong `seo.js` (siteUrl)
+- [ ] Đã cập nhật meta tags trong `index.html`
+- [ ] Đã tạo favicon (`public/favicon.svg`)
+- [ ] Đã chuẩn bị ảnh OpenGraph mặc định (1200x630px)
+- [ ] Đã kiểm tra `robots.txt`
+
+## 7. Build & Test Local
+- [ ] Đã chạy `npm install`
+- [ ] Build thành công (`npm run build`)
+- [ ] Test local (`npm run dev`)
+- [ ] Kiểm tra responsive trên mobile
+- [ ] Test tất cả trang: Home, Products, Blogs, Contact
+- [ ] Test admin login và CRUD operations
+
+## 8. Deploy lần đầu
+- [ ] Build production (`npm run build`)
+- [ ] Deploy (`wrangler pages deploy dist --project-name=thocambyahoa`)
+- [ ] Ghi nhận deployment URL (*.pages.dev)
+
+## 9. Cấu hình Cloudflare Dashboard
+
+### Bindings
+- [ ] D1 Database: `DB` → `byahoa-db`
+- [ ] R2 Bucket: `MEDIA_BUCKET` → `byahoa-media`
+
+### Environment Variables (Production)
+- [ ] `JWT_SECRET`
+- [ ] `ADMIN_USERNAME`
+- [ ] `ADMIN_PASSWORD_HASH`
+- [ ] `R2_PUBLIC_URL`
+
+## 10. Custom Domain (Optional)
+- [ ] Thêm custom domain trong Pages settings
+- [ ] Kiểm tra DNS records đã được tạo
+- [ ] Kiểm tra SSL certificate đã active
+- [ ] Test website qua custom domain
+
+## 11. Testing Production
+- [ ] Truy cập website thành công
+- [ ] Test trang chủ
+- [ ] Test danh sách sản phẩm
+- [ ] Test chi tiết sản phẩm
+- [ ] Test danh sách blog
+- [ ] Test chi tiết blog
+- [ ] Test trang liên hệ
+- [ ] Test nút Zalo/Hotline trên mobile
+- [ ] Test responsive trên nhiều thiết bị
+
+## 12. Admin Panel Testing
+- [ ] Login thành công với username/password
+- [ ] Test thêm sản phẩm mới
+- [ ] Test upload ảnh sản phẩm
+- [ ] Test sửa sản phẩm
+- [ ] Test xóa sản phẩm
+- [ ] Test thêm bài viết mới
+- [ ] Test upload ảnh bài viết
+- [ ] Test Rich Text Editor
+- [ ] Test sửa bài viết
+- [ ] Test xóa bài viết
+- [ ] Test logout
+
+## 13. Performance & SEO
+- [ ] Test tốc độ load trang (PageSpeed Insights)
+- [ ] Kiểm tra meta tags (View Source)
+- [ ] Test OpenGraph (Facebook Debugger)
+- [ ] Kiểm tra mobile-friendliness (Google Mobile-Friendly Test)
+- [ ] Test trên nhiều trình duyệt (Chrome, Safari, Firefox)
+
+## 14. Security
+- [ ] Đã thay đổi mật khẩu mặc định
+- [ ] JWT_SECRET là chuỗi ngẫu nhiên mạnh
+- [ ] Admin panel chỉ truy cập được sau khi login
+- [ ] Upload chỉ chấp nhận file ảnh
+- [ ] File size limit đã được set (5MB)
+
+## 15. Backup & Monitoring
+- [ ] Backup database ban đầu (`wrangler d1 export byahoa-db --output=backup.sql`)
+- [ ] Enable Cloudflare Analytics
+- [ ] Setup monitoring alerts (optional)
+- [ ] Ghi chép thông tin quan trọng (database_id, bucket_name, v.v.)
+
+## 16. Documentation
+- [ ] README.md đã được cập nhật
+- [ ] DEPLOYMENT.md có hướng dẫn đầy đủ
+- [ ] CUSTOMIZATION.md cho khách hàng
+- [ ] Checklist này đã hoàn thành
+
+## 17. Final Checks
+- [ ] Không có console errors trong browser
+- [ ] Không có 404 errors
+- [ ] Tất cả images load đúng
+- [ ] Fonts load đúng
+- [ ] CSS/JS load đúng
+- [ ] API responses đúng format
+
+## 18. Go Live
+- [ ] Thông báo cho team
+- [ ] Cập nhật DNS (nếu cần)
+- [ ] Monitor traffic trong 24h đầu
+- [ ] Sẵn sàng rollback nếu có vấn đề
+
+---
+
+## Troubleshooting Common Issues
+
+### Database không connect
+```bash
+wrangler d1 info byahoa-db
+# Kiểm tra binding trong Dashboard
+```
+
+### Upload ảnh không work
+```bash
+wrangler r2 bucket cors get byahoa-media
+# Kiểm tra CORS config
+```
+
+### Admin không login được
+```bash
+# Test password hash
+echo -n "YOUR_PASSWORD" | openssl dgst -sha256
+# So sánh với ADMIN_PASSWORD_HASH
+```
+
+### Build fails
+```bash
+rm -rf node_modules
+npm install
+npm run build
+```
+
+---
+
+**Lưu ý**: Đánh dấu ✓ vào mỗi item khi hoàn thành. Không bỏ qua bất kỳ bước nào!
+````
+
+## File: CLOUDFLARE_DEPLOY.md
+````markdown
+# Deploy trên Cloudflare Pages
+
+## Cách 1: Deploy qua Dashboard (Khuyến nghị)
+
+### Bước 1: Connect GitHub Repository
+1. Vào https://dash.cloudflare.com
+2. Workers & Pages > Create > Pages > Connect to Git
+3. Chọn repository: `dreamhdr/thocambyahoa`
+4. Configure build settings:
+   - **Framework preset**: None
+   - **Build command**: `npm run build`
+   - **Build output directory**: `dist`
+   - **Root directory**: `/` (để trống)
+5. Click "Save and Deploy"
+
+### Bước 2: Configure Bindings (sau khi deploy lần đầu)
+1. Project Settings > Functions
+2. Add D1 Database binding:
+   - Variable name: `DB`
+   - D1 database: Chọn database đã tạo
+3. Add R2 Bucket binding:
+   - Variable name: `MEDIA_BUCKET`
+   - R2 bucket: Chọn bucket đã tạo
+
+### Bước 3: Configure Environment Variables
+1. Project Settings > Environment variables
+2. Add các biến:
+   - `JWT_SECRET`
+   - `ADMIN_USERNAME`
+   - `ADMIN_PASSWORD_HASH`
+   - `R2_PUBLIC_URL`
+
+## Cách 2: Deploy qua Wrangler CLI
+
+```bash
+# Build project
+npm run build
+
+# Deploy (lần đầu tiên)
+npx wrangler pages deploy dist --project-name=thocambyahoa
+
+# Deploy (các lần sau)
+npx wrangler pages deploy dist
+```
+
+Sau đó cấu hình bindings và environment variables như cách 1.
+
+## Lưu ý
+
+- Cloudflare Pages tự động detect là Pages project, không cần wrangler.toml phức tạp
+- Mỗi lần push code lên GitHub, Cloudflare tự động build và deploy
+- Functions (API) trong thư mục `/functions` được tự động deploy
+
+## Troubleshooting
+
+### Lỗi "Missing entry-point"
+- Đảm bảo build command là `npm run build`
+- Đảm bảo output directory là `dist`
+
+### Functions không hoạt động
+- Kiểm tra bindings (DB và R2) đã được cấu hình
+- Kiểm tra environment variables
+````
+
+## File: cors.json
+````json
+[
+  {
+    "AllowedOrigins": [
+      "https://thocambyahoa.com",
+      "https://*.pages.dev",
+      "http://localhost:3000"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "POST",
+      "DELETE"
+    ],
+    "AllowedHeaders": [
+      "*"
+    ],
+    "ExposeHeaders": [
+      "ETag"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]
+````
+
+## File: create-password-hash.sh
+````bash
+#!/bin/bash
+
+# Script tạo SHA-256 hash cho mật khẩu admin
+# Sử dụng: ./create-password-hash.sh
+
+echo "==================================="
+echo "Tạo Password Hash cho Admin"
+echo "==================================="
+echo ""
+
+read -sp "Nhập mật khẩu admin: " password
+echo ""
+
+if [ -z "$password" ]; then
+    echo "Lỗi: Mật khẩu không được để trống!"
+    exit 1
+fi
+
+# Tạo SHA-256 hash
+hash=$(echo -n "$password" | openssl dgst -sha256 | sed 's/^.* //')
+
+echo ""
+echo "==================================="
+echo "Password Hash đã được tạo:"
+echo ""
+echo "$hash"
+echo ""
+echo "==================================="
+echo ""
+echo "Cập nhật hash này vào wrangler.toml:"
+echo "ADMIN_PASSWORD_HASH = \"$hash\""
+echo ""
+echo "Hoặc cập nhật trong Cloudflare Dashboard:"
+echo "Pages > Settings > Environment Variables"
+echo "==================================="
+````
+
+## File: CUSTOMIZATION.md
+````markdown
+# Hướng dẫn Tùy chỉnh Nội dung
+
+## 1. Thay đổi Thông tin Liên hệ
+
+### Số điện thoại và Zalo
+
+**File: `src/components/ContactButtons.jsx`**
+```javascript
+const zaloLink = 'https://zalo.me/0123456789'; // Thay số điện thoại
+const phoneNumber = '0123456789'; // Thay số điện thoại
+```
+
+**File: `src/pages/ContactPage.jsx`**
+Tìm và thay đổi:
+- Số hotline
+- Email
+- Địa chỉ (nếu cần)
+
+**File: `src/pages/ProductDetailPage.jsx`**
+Tìm và thay đổi link Zalo và số điện thoại trong phần contact buttons.
+
+### Logo và Tên thương hiệu
+
+**File: `src/components/Header.jsx`**
+```jsx
+<h1 className="text-2xl sm:text-3xl font-serif font-bold text-rustic-brown">
+  Bya Hoa
+</h1>
+```
+
+**File: `index.html`**
+Thay đổi `<title>` và các meta tags.
+
+## 2. Thay đổi Màu sắc
+
+**File: `tailwind.config.js`**
+```javascript
+colors: {
+  'rustic-dark': '#2B1810',     // Màu nâu đậm
+  'rustic-brown': '#4A3728',    // Màu nâu chính
+  'rustic-wood': '#8B6F47',     // Màu gỗ
+  'rustic-cream': '#E8DCC4',    // Màu kem
+  'rustic-beige': '#D4C5A9',    // Màu be
+  'indigo-deep': '#1A1A2E',     // Màu chàm đậm
+  'earth-red': '#A0522D',       // Màu đất đỏ
+}
+```
+
+Sau khi thay đổi, chạy lại:
+```bash
+npm run build
+```
+
+## 3. Thay đổi Font chữ
+
+**File: `src/styles/index.css`**
+```css
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+```
+
+Thay thế font chữ từ Google Fonts:
+1. Vào https://fonts.google.com
+2. Chọn font phù hợp
+3. Copy link import
+4. Cập nhật trong CSS
+
+**File: `tailwind.config.js`**
+```javascript
+fontFamily: {
+  'serif': ['Crimson Text', 'Georgia', 'serif'],      // Font tiêu đề
+  'sans': ['Inter', 'system-ui', 'sans-serif'],       // Font chữ thường
+}
+```
+
+## 4. Thêm/Sửa Sản phẩm qua Admin Panel
+
+### Đăng nhập Admin
+1. Truy cập: `https://thocambyahoa.com/admin`
+2. Đăng nhập với username/password đã cấu hình
+
+### Thêm sản phẩm mới
+1. Tab "Quản lý sản phẩm"
+2. Điền form:
+   - **Tên sản phẩm**: Tự động tạo slug
+   - **Danh mục**: Chọn từ dropdown
+   - **Mô tả**: Mô tả chi tiết, mỗi đoạn cách nhau bằng Enter
+   - **Hình ảnh**: Upload ảnh (tối đa 5MB, JPEG/PNG/WebP)
+3. Click "Thêm mới"
+
+### Sửa sản phẩm
+1. Click "Sửa" ở sản phẩm cần chỉnh sửa
+2. Form sẽ được điền sẵn
+3. Chỉnh sửa nội dung
+4. Click "Cập nhật"
+
+### Xóa sản phẩm
+1. Click "Xóa" ở sản phẩm cần xóa
+2. Xác nhận xóa
+
+## 5. Thêm/Sửa Bài viết Blog
+
+### Thêm bài viết mới
+1. Tab "Quản lý bài viết"
+2. Điền form:
+   - **Tiêu đề**: Tự động tạo slug
+   - **Tóm tắt**: Tóm tắt ngắn gọn (1-2 câu)
+   - **Nội dung**: Sử dụng Rich Text Editor
+   - **Ảnh bìa**: Upload ảnh cover
+3. Click "Thêm mới"
+
+### Sử dụng Rich Text Editor
+- **Bold**: Chọn text > Click nút B
+- **Italic**: Chọn text > Click nút I
+- **Heading**: Chọn H2 hoặc H3 từ dropdown
+- **List**: Click nút bullet list hoặc numbered list
+- **Link**: Chọn text > Click nút link > Nhập URL
+
+### Format bài viết đẹp
+```html
+<h2>Tiêu đề chính</h2>
+<p>Đoạn văn giới thiệu...</p>
+
+<h3>Tiêu đề phụ</h3>
+<p>Nội dung chi tiết...</p>
+
+<ul>
+<li>Điểm nổi bật 1</li>
+<li>Điểm nổi bật 2</li>
+</ul>
+```
+
+## 6. Thay đổi Nội dung Trang chủ
+
+**File: `src/pages/HomePage.jsx`**
+
+### Hero Section
+Tìm dòng:
+```jsx
+<h1 className="...">
+  Hồi Sinh Hoa Văn Cổ<br />
+  Dệt Từ Lụa Tơ Tằm và Sợi Tự Nhiên Tây Nguyên
+</h1>
+<p className="...">
+  Nghệ nhân H'Kim Hoa Byă dân tộc M'nông...
+</p>
+```
+
+### Phần "Nét Đẹp Khác Biệt"
+Tìm section "Uniqueness Section" và thay đổi nội dung.
+
+## 7. Thay đổi Thông tin Footer
+
+**File: `src/components/Footer.jsx`**
+
+Cập nhật:
+- Địa chỉ
+- Hotline
+- Email
+- Mã số thuế
+- Tên công ty
+- Đại diện pháp luật
+
+## 8. Thêm/Bớt Menu
+
+**File: `src/components/Header.jsx`**
+```javascript
+const navLinks = [
+  { path: '/', label: 'Trang chủ' },
+  { path: '/san-pham', label: 'Sản phẩm' },
+  { path: '/cau-chuyen', label: 'Câu chuyện' },
+  { path: '/lien-he', label: 'Liên hệ' },
+  // Thêm menu mới ở đây
+];
+```
+
+## 9. Thay đổi Hình ảnh
+
+### Hình ảnh mặc định
+Đặt hình ảnh vào thư mục `public/images/`:
+- `og-default.jpg`: Ảnh OpenGraph mặc định (1200x630px)
+- `placeholder-product.jpg`: Ảnh placeholder cho sản phẩm
+- `placeholder-blog.jpg`: Ảnh placeholder cho blog
+
+### Hình ảnh sản phẩm/blog
+Upload qua Admin Panel hoặc đặt trực tiếp trong R2 bucket.
+
+## 10. SEO - Thay đổi Meta Tags mặc định
+
+**File: `src/utils/seo.js`**
+```javascript
+export const defaultSEO = {
+  siteName: 'Thổ cẩm Bya Hoa',
+  defaultTitle: 'Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên',
+  defaultDescription: 'Mô tả mặc định...',
+  siteUrl: 'https://thocambyahoa.com',
+  defaultImage: '/images/og-default.jpg'
+};
+```
+
+## 11. Thay đổi Giờ làm việc
+
+**File: `src/pages/ContactPage.jsx`**
+Tìm section "Working Hours" và cập nhật.
+
+## 12. Thêm Social Media Links
+
+**File: `src/components/Footer.jsx`**
+Thêm section mới:
+```jsx
+<div>
+  <h4 className="text-lg font-semibold mb-4">Theo dõi chúng tôi</h4>
+  <div className="flex gap-3">
+    <a href="https://facebook.com/byahoa">Facebook</a>
+    <a href="https://instagram.com/byahoa">Instagram</a>
+  </div>
+</div>
+```
+
+## 13. Backup và Restore
+
+### Backup Database
+```bash
+wrangler d1 export byahoa-db --output=backup-$(date +%Y%m%d).sql
+```
+
+### Restore Database
+```bash
+wrangler d1 execute byahoa-db --file=backup-20240818.sql
+```
+
+### Backup Images từ R2
+```bash
+wrangler r2 object list byahoa-media > r2-files.txt
+# Download từng file hoặc sử dụng S3-compatible tools
+```
+
+## 14. Testing sau khi thay đổi
+
+Sau mỗi thay đổi:
+1. Build local: `npm run build`
+2. Test local: `npm run preview`
+3. Kiểm tra responsive trên mobile
+4. Deploy: `npm run deploy`
+5. Test production
+6. Clear cache trình duyệt (Ctrl+Shift+R)
+
+## 15. Liên hệ hỗ trợ
+
+Nếu cần hỗ trợ kỹ thuật, tham khảo:
+- Cloudflare Docs: https://developers.cloudflare.com
+- React Docs: https://react.dev
+- Tailwind CSS Docs: https://tailwindcss.com
+````
+
+## File: DEPLOYMENT.md
+````markdown
+# Hướng dẫn Deploy lên Cloudflare Pages
+
+## Bước 1: Chuẩn bị tài khoản Cloudflare
+
+1. Đăng ký/Đăng nhập tài khoản Cloudflare: https://dash.cloudflare.com
+2. Cài đặt Wrangler CLI:
+```bash
+npm install -g wrangler
+wrangler login
+```
+
+## Bước 2: Tạo D1 Database
+
+```bash
+# Tạo production database
+wrangler d1 create byahoa-db
+
+# Output sẽ hiển thị database_id, copy và lưu lại
+# Ví dụ: database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Cập nhật database_id vào wrangler.toml tại dòng:
+# database_id = "YOUR_DATABASE_ID_HERE"
+
+# Chạy migration để tạo bảng và seed data
+wrangler d1 execute byahoa-db --file=./schema.sql
+```
+
+Kiểm tra database đã được tạo:
+```bash
+wrangler d1 execute byahoa-db --command="SELECT * FROM products"
+```
+
+## Bước 3: Tạo R2 Bucket
+
+```bash
+# Tạo R2 bucket
+wrangler r2 bucket create byahoa-media
+
+# Cấu hình CORS
+wrangler r2 bucket cors put byahoa-media --cors-config cors.json
+
+# Kiểm tra CORS
+wrangler r2 bucket cors get byahoa-media
+```
+
+## Bước 4: Tạo mật khẩu Admin
+
+```bash
+# Tạo SHA-256 hash cho mật khẩu
+# Ví dụ với mật khẩu "MatKhauManhCuaBan123"
+echo -n "MatKhauManhCuaBan123" | openssl dgst -sha256
+
+# Output sẽ là: (stdin)= abc123def456...
+# Copy hash này (phần sau dấu =)
+```
+
+Cập nhật hash vào `wrangler.toml`:
+```toml
+[env.production.vars]
+ADMIN_PASSWORD_HASH = "abc123def456..."
+```
+
+## Bước 5: Cấu hình Domain cho R2
+
+### Option 1: Sử dụng R2.dev subdomain (Miễn phí, public)
+```bash
+# Enable public access
+wrangler r2 bucket domain add byahoa-media --domain auto
+# Output: https://pub-xxxxx.r2.dev
+```
+
+### Option 2: Sử dụng Custom Domain (Khuyến nghị)
+1. Vào Cloudflare Dashboard > R2 > byahoa-media
+2. Settings > Public Access > Custom Domains
+3. Add domain: `media.thocambyahoa.com`
+4. Cloudflare sẽ tự động tạo DNS record
+
+Cập nhật `R2_PUBLIC_URL` trong `wrangler.toml`:
+```toml
+R2_PUBLIC_URL = "https://media.thocambyahoa.com"
+```
+
+## Bước 6: Build và Deploy
+
+```bash
+# Build frontend
+npm run build
+
+# Deploy lên Cloudflare Pages
+wrangler pages deploy dist --project-name=thocambyahoa
+
+# Lần đầu tiên sẽ hỏi:
+# - Project name: thocambyahoa
+# - Production branch: main
+```
+
+## Bước 7: Cấu hình Bindings trên Dashboard
+
+1. Vào Cloudflare Dashboard
+2. Pages > thocambyahoa > Settings > Functions
+
+### D1 Database Binding:
+- Variable name: `DB`
+- D1 database: `byahoa-db`
+
+### R2 Bucket Binding:
+- Variable name: `MEDIA_BUCKET`
+- R2 bucket: `byahoa-media`
+
+### Environment Variables:
+- `JWT_SECRET`: random string dài (ví dụ: `openssl rand -base64 32`)
+- `ADMIN_USERNAME`: `admin@byahoa.com`
+- `ADMIN_PASSWORD_HASH`: hash đã tạo ở bước 4
+- `R2_PUBLIC_URL`: URL R2 đã cấu hình ở bước 5
+
+## Bước 8: Cấu hình Custom Domain (Optional)
+
+1. Pages > thocambyahoa > Custom domains
+2. Add domain: `thocambyahoa.com`
+3. Cloudflare sẽ tự động:
+   - Tạo DNS records
+   - Cấp SSL certificate
+   - Enable CDN
+
+## Bước 9: Test Website
+
+1. Truy cập domain của bạn: `https://thocambyahoa.pages.dev` hoặc `https://thocambyahoa.com`
+2. Test các trang:
+   - Trang chủ: `/`
+   - Sản phẩm: `/san-pham`
+   - Blog: `/cau-chuyen`
+   - Admin login: `/admin`
+
+3. Test Admin Panel:
+   - Login với username/password đã cấu hình
+   - Thử thêm/sửa/xóa sản phẩm
+   - Thử upload ảnh
+   - Thử thêm/sửa bài viết
+
+## Bước 10: Cập nhật thông tin liên hệ
+
+Cập nhật các file sau với thông tin thật:
+
+### 1. ContactButtons.jsx
+```javascript
+const zaloLink = 'https://zalo.me/YOUR_PHONE_NUMBER';
+const phoneNumber = 'YOUR_PHONE_NUMBER';
+```
+
+### 2. ContactPage.jsx
+Cập nhật số điện thoại và email thật
+
+### 3. Footer.jsx
+Kiểm tra lại thông tin pháp lý
+
+## Troubleshooting
+
+### Lỗi "Database not found"
+```bash
+# Kiểm tra binding
+wrangler pages deployment tail
+
+# Kiểm tra database
+wrangler d1 info byahoa-db
+```
+
+### Lỗi "R2 bucket not found"
+```bash
+# List tất cả buckets
+wrangler r2 bucket list
+
+# Kiểm tra bucket
+wrangler r2 bucket info byahoa-media
+```
+
+### Lỗi upload ảnh
+- Kiểm tra CORS config
+- Kiểm tra R2 binding trong Dashboard
+- Kiểm tra R2_PUBLIC_URL đã đúng chưa
+
+### Lỗi "Unauthorized" khi login admin
+- Kiểm tra ADMIN_PASSWORD_HASH đúng chưa
+- Test hash:
+```bash
+echo -n "YOUR_PASSWORD" | openssl dgst -sha256
+```
+
+## Update Code sau này
+
+```bash
+# Pull code mới
+git pull
+
+# Build
+npm run build
+
+# Deploy
+wrangler pages deploy dist --project-name=thocambyahoa
+```
+
+## Monitoring & Analytics
+
+1. Cloudflare Dashboard > Analytics > Web Analytics
+2. Pages > thocambyahoa > Analytics
+3. D1 > byahoa-db > Metrics
+4. R2 > byahoa-media > Metrics
+
+## Backup Database
+
+```bash
+# Export data
+wrangler d1 export byahoa-db --output=backup.sql
+
+# Import data (nếu cần restore)
+wrangler d1 execute byahoa-db --file=backup.sql
+```
+
+## Chi phí dự kiến (Cloudflare Free Tier)
+
+- **Pages**: 500 builds/month, unlimited requests - **FREE**
+- **D1**: 5GB storage, 5M rows read/day - **FREE**
+- **R2**: 10GB storage, 10M Class A operations - **FREE**
+- **Bandwidth**: Unlimited - **FREE**
+
+Với traffic vừa phải, website sẽ hoàn toàn miễn phí!
+````
+
+## File: HANDOVER.md
+````markdown
+# 📋 BÀN GIAO DỰ ÁN - Thổ cẩm Bya Hoa
+
+## Thông tin Dự án
+
+**Tên dự án**: Website Thổ cẩm Bya Hoa  
+**Khách hàng**: Công ty TNHH Bya Hoa  
+**Nghệ nhân**: H'Kim Hoa Byă (dân tộc M'nông)  
+**Ngày hoàn thành**: 18/08/2026  
+
+---
+
+## Tech Stack
+
+- **Frontend**: React 18 + Vite + Tailwind CSS
+- **Backend**: Cloudflare Pages Functions (Serverless)
+- **Database**: Cloudflare D1 (SQLite)
+- **Storage**: Cloudflare R2 (Object Storage)
+- **Authentication**: JWT với HTTP-only Cookie
+- **Editor**: React Quill (Rich Text Editor)
+
+---
+
+## Cấu trúc Dự án
+
+```
+thocambyahoa/
+├── functions/api/          # Backend API (6 files)
+│   ├── auth.js            # Authentication
+│   ├── products.js        # Products CRUD
+│   ├── blogs.js           # Blogs CRUD
+│   ├── categories.js      # Categories
+│   ├── upload.js          # Image upload to R2
+│   └── jwt-helper.js      # JWT utilities
+│
+├── src/
+│   ├── components/        # React Components (5 files)
+│   ├── pages/            # React Pages (8 files)
+│   ├── utils/            # Utilities (2 files)
+│   └── styles/           # CSS Styles
+│
+├── public/               # Static assets
+├── schema.sql           # Database schema + seed data
+├── wrangler.toml        # Cloudflare config
+│
+└── Documentation/        # Tài liệu (7 files)
+    ├── README.md
+    ├── QUICK_START.md
+    ├── DEPLOYMENT.md
+    ├── CUSTOMIZATION.md
+    ├── MAINTENANCE.md
+    ├── CHECKLIST.md
+    └── PROJECT_SUMMARY.md
+```
+
+**Tổng cộng**: 56 files | ~5,000+ dòng code
+
+---
+
+## Tính Năng Đã Hoàn Thành
+
+### Frontend (Giao diện người dùng)
+✅ Trang chủ với Hero banner và giới thiệu  
+✅ Danh sách sản phẩm với filter theo danh mục  
+✅ Chi tiết sản phẩm (KHÔNG hiển thị giá - theo yêu cầu)  
+✅ Danh sách bài viết blog  
+✅ Chi tiết bài viết với nội dung rich HTML  
+✅ Trang liên hệ với thông tin đầy đủ  
+✅ Nút "Tư vấn Zalo" và "Gọi Hotline" cố định trên mobile  
+✅ Responsive Mobile-First design  
+✅ SEO optimized (meta tags, friendly URLs)  
+
+### Admin Panel (Quản trị)
+✅ Đăng nhập bảo mật với JWT authentication  
+✅ Dashboard quản lý sản phẩm  
+✅ Dashboard quản lý bài viết  
+✅ Thêm/Sửa/Xóa sản phẩm  
+✅ Thêm/Sửa/Xóa bài viết  
+✅ Rich Text Editor cho blog  
+✅ Upload ảnh trực tiếp lên R2  
+✅ Auto-generate slug từ tiêu đề tiếng Việt  
+
+### Backend API
+✅ Authentication API (login/logout)  
+✅ Products API (CRUD với authorization)  
+✅ Blogs API (CRUD với authorization)  
+✅ Categories API  
+✅ Upload API (R2 integration)  
+✅ CORS configured  
+✅ Security headers  
+
+### Database
+✅ Schema với 3 bảng (products, blogs, categories)  
+✅ Seed data:
+- 2 danh mục (Khăn choàng, Túi xách)
+- 3 sản phẩm mẫu với mô tả chi tiết
+- 3 bài blog về văn hóa thổ cẩm Tây Nguyên
+
+---
+
+## Thông tin Truy cập
+
+### Admin Panel
+**URL**: `https://thocambyahoa.com/admin`  
+**Username**: Được cấu hình trong Environment Variables  
+**Password**: Được cấu hình qua password hash  
+
+> ⚠️ Thông tin đăng nhập được bảo mật trong Cloudflare Dashboard
+
+---
+
+## Hướng dẫn Sử dụng
+
+### Dành cho Admin/Quản trị viên:
+
+1. **Đăng nhập Admin**:
+   - Truy cập `/admin`
+   - Nhập username và password
+
+2. **Thêm Sản phẩm Mới**:
+   - Tab "Quản lý sản phẩm"
+   - Điền form (tên, danh mục, mô tả, ảnh)
+   - Click "Thêm mới"
+
+3. **Viết Bài Blog**:
+   - Tab "Quản lý bài viết"
+   - Sử dụng Rich Text Editor
+   - Upload ảnh bìa
+   - Click "Thêm mới"
+
+4. **Sửa/Xóa Nội dung**:
+   - Click "Sửa" hoặc "Xóa" ở item tương ứng
+
+### Dành cho Khách hàng:
+
+- Xem sản phẩm: `/san-pham`
+- Đọc blog: `/cau-chuyen`
+- Liên hệ: Click nút Zalo/Hotline hoặc vào `/lien-he`
+
+**Chi tiết**: Xem file `MAINTENANCE.md`
+
+---
+
+## Deployment & Hosting
+
+**Platform**: Cloudflare Pages  
+**Domain**: thocambyahoa.com (cần cấu hình)  
+**SSL**: Tự động (Cloudflare)  
+**CDN**: Global (Cloudflare)  
+
+### Chi phí Dự kiến:
+**$0/tháng** với Cloudflare Free Tier (traffic vừa phải)
+
+### Các Bước Deploy:
+1. Setup Cloudflare account
+2. Tạo D1 database
+3. Tạo R2 bucket
+4. Build project: `npm run build`
+5. Deploy: `npm run deploy`
+6. Cấu hình bindings và environment variables
+
+**Chi tiết**: Xem file `DEPLOYMENT.md` hoặc `QUICK_START.md`
+
+---
+
+## Bảo Trì & Cập Nhật
+
+### Thao tác Thường xuyên:
+- Thêm/sửa sản phẩm qua Admin Panel (hàng ngày)
+- Viết bài blog mới (hàng tuần)
+- Backup database (hàng tuần)
+- Kiểm tra analytics (hàng tuần)
+
+### Thao tác Định kỳ:
+- Thay đổi password admin (mỗi 3 tháng)
+- Review performance (hàng tháng)
+- Update dependencies (khi cần)
+
+**Chi tiết**: Xem file `MAINTENANCE.md`
+
+---
+
+## Tùy Chỉnh Nội Dung
+
+### Thông tin Cần Cập Nhật:
+
+1. **Số điện thoại và Zalo** (QUAN TRỌNG):
+   - `src/components/ContactButtons.jsx`
+   - `src/pages/ContactPage.jsx`
+   - `src/pages/ProductDetailPage.jsx`
+
+2. **Thông tin liên hệ**:
+   - Email, địa chỉ trong `ContactPage.jsx`
+   - Footer trong `Footer.jsx`
+
+3. **Domain**:
+   - `src/utils/seo.js` (siteUrl)
+
+4. **Màu sắc và Font**:
+   - `tailwind.config.js`
+   - `src/styles/index.css`
+
+**Chi tiết**: Xem file `CUSTOMIZATION.md`
+
+---
+
+## Tài Liệu Kỹ Thuật
+
+### Cho Developer:
+📖 `README.md` - Tổng quan dự án  
+📖 `PROJECT_SUMMARY.md` - Chi tiết kỹ thuật đầy đủ  
+📖 `DEPLOYMENT.md` - Hướng dẫn deploy  
+
+### Cho User/Admin:
+📖 `QUICK_START.md` - Bắt đầu nhanh  
+📖 `CUSTOMIZATION.md` - Tùy chỉnh nội dung  
+📖 `MAINTENANCE.md` - Bảo trì hàng ngày  
+📖 `CHECKLIST.md` - Checklist deploy  
+
+---
+
+## Security & Bảo mật
+
+✅ JWT authentication với HTTP-only Cookie  
+✅ Password hashing (SHA-256)  
+✅ Protected admin routes  
+✅ File upload validation (type + size)  
+✅ CORS configured  
+✅ Security headers  
+✅ XSS protection  
+
+---
+
+## Troubleshooting & Support
+
+### Lỗi Thường gặp:
+- Database not found → Kiểm tra binding
+- Upload ảnh fail → Kiểm tra CORS
+- Không login được → Kiểm tra password hash
+
+### Resources:
+- Cloudflare Docs: https://developers.cloudflare.com
+- React Docs: https://react.dev
+- Tài liệu dự án: Các file .md trong thư mục root
+
+---
+
+## Scripts Hỗ trợ
+
+```bash
+# Tạo password hash
+./create-password-hash.sh
+
+# Test API endpoints
+./test-api.sh https://thocambyahoa.com
+
+# Kiểm tra dự án
+./check-project.sh
+```
+
+---
+
+## Source Code
+
+### Repository:
+- Location: `/Users/dreamhdr/ByaHoa/thocambyahoa`
+- Files: 56 files
+- Size: ~5,000+ lines of code
+
+### Backup:
+✅ Code đầy đủ trong thư mục dự án  
+✅ Database schema trong `schema.sql`  
+✅ Documentation đầy đủ  
+
+---
+
+## Testing Checklist
+
+Trước khi bàn giao:
+- [x] Build thành công
+- [x] API endpoints hoạt động
+- [x] Frontend responsive trên mobile
+- [x] Admin login và CRUD operations
+- [x] Upload ảnh
+- [x] SEO meta tags
+- [x] Documentation đầy đủ
+
+---
+
+## Next Steps
+
+1. **Deploy lên Cloudflare**:
+   - Tạo tài khoản Cloudflare
+   - Follow hướng dẫn trong `DEPLOYMENT.md`
+
+2. **Cập nhật thông tin thật**:
+   - Số điện thoại và Zalo
+   - Email và địa chỉ
+   - Custom domain
+
+3. **Test Production**:
+   - Test tất cả tính năng
+   - Test trên nhiều thiết bị
+   - Monitor analytics
+
+4. **Go Live**:
+   - Thông báo khách hàng
+   - Setup monitoring
+   - Ready for traffic
+
+---
+
+## Contact & Support
+
+**Developer**: Kiro AI  
+**Tech Stack**: React + Cloudflare Ecosystem  
+**Documentation**: Đầy đủ trong thư mục dự án  
+
+---
+
+## License
+
+© 2024 Công ty TNHH Bya Hoa  
+Mã số thuế: 6001816916  
+Địa chỉ: 2A/10 Bùi Thị Xuân, Buôn Ma Thuột, Đắk Lắk  
+Đại diện: H'Kim Hoa Byă  
+
+---
+
+**Dự án đã hoàn thành 100% và sẵn sàng deploy!** 🎉
+
+Xem `PROJECT_COMPLETE.txt` để biết thêm chi tiết.
+````
+
+## File: index.html.template
+````
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Thổ cẩm Bya Hoa - Sản phẩm thổ cẩm tơ tằm tự nhiên dệt thủ công bởi nghệ nhân H'Kim Hoa Byă. Túi xách, khăn choàng thổ cẩm cao cấp với họa tiết M'nông và Ê-đê truyền thống." />
+    <meta name="keywords" content="thổ cẩm, bya hoa, tơ tằm, tây nguyên, thổ cẩm tây nguyên, túi xách thổ cẩm, khăn choàng thổ cẩm" />
+    <meta name="author" content="Bya Hoa" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://thocambyahoa.com/" />
+    <meta property="og:title" content="Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên" />
+    <meta property="og:description" content="Thổ cẩm Bya Hoa - Sản phẩm thổ cẩm tơ tằm tự nhiên dệt thủ công bởi nghệ nhân H'Kim Hoa Byă." />
+    <meta property="og:image" content="https://thocambyahoa.com/images/og-default.jpg" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://thocambyahoa.com/" />
+    <meta property="twitter:title" content="Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên" />
+    <meta property="twitter:description" content="Thổ cẩm Bya Hoa - Sản phẩm thổ cẩm tơ tằm tự nhiên dệt thủ công bởi nghệ nhân H'Kim Hoa Byă." />
+    <meta property="twitter:image" content="https://thocambyahoa.com/images/og-default.jpg" />
+
+    <title>Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+````
+
+## File: LICENSE
+````
+Copyright (c) 2024 Công ty TNHH Bya Hoa
+
+Bảo lưu mọi quyền.
+
+Mã nguồn này là tài sản của Công ty TNHH Bya Hoa.
+Nghiêm cấm sao chép, phân phối, hoặc sử dụng mà không có sự cho phép bằng văn bản.
+
+---
+
+CÔNG TY TNHH BYA HOA
+Mã số thuế: 6001816916
+Địa chỉ: 2A/10 Bùi Thị Xuân, Phường Buôn Ma Thuột, Tỉnh Đắk Lắk, Việt Nam
+Đại diện pháp luật: H'Kim Hoa Byă
+````
+
+## File: MAINTENANCE.md
+````markdown
+# Hướng dẫn Bảo trì & Vận hành
+
+## Thao tác Hàng ngày
+
+### Đăng nhập Admin
+1. Truy cập: `https://thocambyahoa.com/admin`
+2. Nhập username và password
+3. Chọn tab "Quản lý sản phẩm" hoặc "Quản lý bài viết"
+
+### Thêm Sản phẩm Mới (5 phút)
+1. Đăng nhập admin
+2. Tab "Quản lý sản phẩm"
+3. Điền form:
+   - Tên sản phẩm (slug tự động)
+   - Chọn danh mục
+   - Mô tả chi tiết
+   - Upload ảnh
+4. Click "Thêm mới"
+
+### Viết Bài Blog Mới (10-15 phút)
+1. Đăng nhập admin
+2. Tab "Quản lý bài viết"
+3. Điền form:
+   - Tiêu đề (slug tự động)
+   - Tóm tắt ngắn gọn
+   - Nội dung (dùng editor)
+   - Upload ảnh bìa
+4. Click "Thêm mới"
+
+### Sửa Nội dung
+1. Tìm item cần sửa trong danh sách
+2. Click "Sửa"
+3. Chỉnh sửa trong form
+4. Click "Cập nhật"
+
+### Xóa Nội dung
+1. Click "Xóa" ở item cần xóa
+2. Xác nhận
+
+## Thao tác Hàng tuần
+
+### Kiểm tra Tình trạng Website
+```bash
+# Test API
+curl https://thocambyahoa.com/api/products
+curl https://thocambyahoa.com/api/blogs
+
+# Hoặc dùng script
+./test-api.sh https://thocambyahoa.com
+```
+
+### Backup Database
+```bash
+# Tạo backup
+wrangler d1 export byahoa-db --output=backup-$(date +%Y%m%d).sql
+
+# Lưu file backup vào nơi an toàn
+```
+
+### Kiểm tra Analytics
+1. Vào Cloudflare Dashboard
+2. Pages > thocambyahoa > Analytics
+3. Xem:
+   - Số lượt truy cập
+   - Trang được xem nhiều nhất
+   - Nguồn traffic
+
+## Thao tác Hàng tháng
+
+### Review Performance
+1. Chạy PageSpeed Insights: https://pagespeed.web.dev
+2. Kiểm tra Core Web Vitals
+3. Tối ưu nếu cần:
+   - Nén ảnh trước khi upload
+   - Xóa sản phẩm/bài viết không dùng
+
+### Clean up R2 Storage
+```bash
+# Xem dung lượng đã dùng
+wrangler r2 bucket info byahoa-media
+
+# List files
+wrangler r2 object list byahoa-media
+```
+
+### Update Dependencies (nếu cần)
+```bash
+npm update
+npm run build
+# Test local
+npm run preview
+# Deploy
+npm run deploy
+```
+
+## Xử lý Sự cố Thường gặp
+
+### Lỗi: Không thêm được sản phẩm/bài viết
+**Nguyên nhân**: Session hết hạn
+**Giải pháp**:
+1. Đăng xuất
+2. Đăng nhập lại
+3. Thử lại
+
+### Lỗi: Upload ảnh thất bại
+**Nguyên nhân**: File quá lớn hoặc sai định dạng
+**Giải pháp**:
+1. Kiểm tra file < 5MB
+2. Chỉ dùng JPEG, PNG, WebP
+3. Nén ảnh nếu cần: https://tinypng.com
+
+### Lỗi: Website chậm
+**Giải pháp**:
+1. Clear cache browser (Ctrl+Shift+R)
+2. Kiểm tra kích thước ảnh
+3. Nén ảnh lớn hơn 500KB
+
+### Lỗi: Không đăng nhập được admin
+**Giải pháp**:
+1. Kiểm tra username/password
+2. Clear cookies browser
+3. Thử trình duyệt khác
+4. Contact kỹ thuật nếu vẫn lỗi
+
+## Deploy Code Mới
+
+### Khi Developer gửi code mới
+```bash
+# 1. Pull code mới
+git pull origin main
+
+# 2. Install dependencies mới (nếu có)
+npm install
+
+# 3. Build
+npm run build
+
+# 4. Deploy
+npm run deploy
+
+# 5. Test production
+# Mở website và test các tính năng
+```
+
+### Rollback nếu có lỗi
+```bash
+# Vào Cloudflare Dashboard
+# Pages > thocambyahoa > Deployments
+# Click "..." ở deployment trước đó
+# Chọn "Rollback to this deployment"
+```
+
+## Quản lý Domain & SSL
+
+### Kiểm tra SSL Certificate
+1. Vào: https://www.ssllabs.com/ssltest/
+2. Nhập domain: thocambyahoa.com
+3. Đợi kết quả
+4. Grade A là OK
+
+### Gia hạn Domain
+- Domain `.com` gia hạn hàng năm
+- Cloudflare sẽ gửi email nhắc nhở
+- Gia hạn trước 30 ngày
+
+## Monitoring & Alerts
+
+### Setup Email Alerts (Recommended)
+1. Cloudflare Dashboard
+2. Notifications
+3. Tạo alert cho:
+   - Site down
+   - High error rate
+   - SSL expiring
+
+### Check Site Status
+```bash
+# Ping website
+curl -I https://thocambyahoa.com
+
+# Expected: HTTP/2 200
+```
+
+## Bảo mật
+
+### Thay đổi Password Admin (mỗi 3 tháng)
+```bash
+# 1. Tạo password mới
+./create-password-hash.sh
+
+# 2. Cập nhật trong Cloudflare Dashboard
+# Pages > Settings > Environment Variables
+# Edit ADMIN_PASSWORD_HASH
+
+# 3. Redeploy
+```
+
+### Review Access Logs
+1. Cloudflare Dashboard
+2. Analytics > Security
+3. Xem các truy cập đáng ngờ
+
+## Contact Hỗ trợ
+
+### Khi cần hỗ trợ kỹ thuật
+1. Mô tả vấn đề chi tiết
+2. Screenshot lỗi (nếu có)
+3. Cho biết:
+   - Browser đang dùng
+   - Thời gian xảy ra lỗi
+   - Các bước đã thử
+
+### Resources
+- Cloudflare Support: https://dash.cloudflare.com/?to=/:account/support
+- Cloudflare Community: https://community.cloudflare.com
+- Documentation: README.md, DEPLOYMENT.md, CUSTOMIZATION.md
+
+## Lưu ý Quan trọng
+
+### ⚠️ KHÔNG BAO GIỜ:
+- Xóa toàn bộ database
+- Xóa R2 bucket
+- Chia sẻ password admin
+- Push code trực tiếp production (luôn test trước)
+- Sửa code nếu không hiểu
+
+### ✅ LUÔN LUÔN:
+- Backup trước khi thay đổi lớn
+- Test trên local trước khi deploy
+- Giữ password an toàn
+- Monitor analytics thường xuyên
+- Clear cache sau khi deploy
+
+## Checklist Bảo trì Định kỳ
+
+### Hàng ngày:
+- [ ] Kiểm tra website hoạt động
+- [ ] Trả lời liên hệ từ khách hàng (nếu có)
+
+### Hàng tuần:
+- [ ] Backup database
+- [ ] Xem analytics
+- [ ] Kiểm tra page speed
+
+### Hàng tháng:
+- [ ] Review toàn bộ nội dung
+- [ ] Clean up storage
+- [ ] Check SSL status
+- [ ] Update dependencies (nếu cần)
+
+### Hàng quý:
+- [ ] Thay đổi password admin
+- [ ] Full backup (DB + R2)
+- [ ] Performance audit
+- [ ] Security review
+````
+
+## File: postcss.config.js
+````javascript
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+````
+
+## File: PROJECT_COMPLETE.txt
+````
+╔═══════════════════════════════════════════════════════════════╗
+║                                                               ║
+║        🎉 DỰ ÁN WEBSITE THỔ CẨM BYA HOA HOÀN THÀNH 🎉        ║
+║                                                               ║
+╚═══════════════════════════════════════════════════════════════╝
+
+📦 TỔNG QUAN:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Website giới thiệu thương hiệu Thổ cẩm Bya Hoa
+Nghệ nhân: H'Kim Hoa Byă (dân tộc M'nông)
+Tech Stack: React + Vite + Tailwind + Cloudflare (Pages + D1 + R2)
+
+✅ ĐÃ LẬP TRÌNH XONG:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Backend (6 API files)
+Frontend (13 components/pages)
+Database (Schema + Seed data)
+Documentation (6 files)
+Configuration (đầy đủ)
+
+📖 ĐỌC NGAY: PROJECT_SUMMARY.md
+
+🚀 CÁC BƯỚC TIẾP THEO:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. npm install
+2. ./create-password-hash.sh
+3. Setup Cloudflare (D1 + R2)
+4. npm run build
+5. npm run deploy
+
+Chi tiết xem DEPLOYMENT.md
+
+💰 CHI PHÍ: $0/tháng (Cloudflare Free Tier)
+
+🎉 SẴN SÀNG DEPLOY! 🚀
+````
+
+## File: PROJECT_SUMMARY.md
+````markdown
+# 🎉 DỰ ÁN HOÀN THÀNH - Thổ cẩm Bya Hoa
+
+## 📦 Tổng quan Dự án
+
+Website giới thiệu thương hiệu **Thổ cẩm Bya Hoa** - sản phẩm thổ cẩm tơ tằm cao cấp dệt thủ công bởi nghệ nhân **H'Kim Hoa Byă** (dân tộc M'nông, Đắk Lắk).
+
+**Tech Stack**: React + Vite + Tailwind CSS + Cloudflare Pages + D1 + R2
+
+---
+
+## ✅ Đã Hoàn Thành
+
+### 1. Database Schema (D1)
+✅ File: `schema.sql`
+- 3 bảng: products, blogs, categories
+- Seed data đầy đủ:
+  - 2 danh mục (Khăn choàng, Túi xách)
+  - 3 sản phẩm mẫu với mô tả chi tiết
+  - 3 bài blog với nội dung văn hóa
+
+### 2. Backend API (Cloudflare Pages Functions)
+✅ Thư mục: `functions/api/`
+
+**API Endpoints:**
+- `auth.js` - Đăng nhập/logout admin (JWT + HTTP-only Cookie)
+- `products.js` - CRUD sản phẩm (GET public, POST/PUT/DELETE admin)
+- `blogs.js` - CRUD bài viết (GET public, POST/PUT/DELETE admin)
+- `categories.js` - Lấy danh sách danh mục
+- `upload.js` - Upload ảnh lên R2 (admin only)
+- `jwt-helper.js` - JWT utilities (sign/verify)
+
+**Bảo mật:**
+- JWT authentication với HTTP-only Cookie
+- Password hash SHA-256
+- CORS configured
+- Admin routes protected
+
+### 3. Frontend Components
+✅ Thư mục: `src/components/`
+
+**Components:**
+- `Header.jsx` - Responsive header với mobile menu
+- `Footer.jsx` - Footer với thông tin pháp lý đầy đủ
+- `ContactButtons.jsx` - Nút Zalo/Hotline cố định (mobile)
+- `ProductCard.jsx` - Card sản phẩm responsive
+- `BlogCard.jsx` - Card bài viết responsive
+
+### 4. Frontend Pages
+✅ Thư mục: `src/pages/`
+
+**Public Pages:**
+- `HomePage.jsx` - Trang chủ với Hero banner + sản phẩm nổi bật
+- `ProductsPage.jsx` - Danh sách sản phẩm với filter
+- `ProductDetailPage.jsx` - Chi tiết sản phẩm (KHÔNG hiển thị giá)
+- `BlogsPage.jsx` - Danh sách bài viết
+- `BlogDetailPage.jsx` - Chi tiết bài viết với rich content
+- `ContactPage.jsx` - Trang liên hệ
+
+**Admin Pages:**
+- `AdminLoginPage.jsx` - Đăng nhập admin
+- `AdminDashboardPage.jsx` - Quản trị sản phẩm & blog với Rich Text Editor
+
+### 5. Utilities
+✅ Thư mục: `src/utils/`
+
+- `api.js` - API client functions
+- `seo.js` - SEO helpers (generateSlug, updateMetaTags)
+
+### 6. Styling
+✅ Tailwind CSS với theme Rustic/Ethnic Đại Ngàn
+
+**Màu sắc:**
+- `rustic-dark` - Nâu đậm (#2B1810)
+- `rustic-brown` - Nâu chính (#4A3728)
+- `rustic-wood` - Màu gỗ (#8B6F47)
+- `rustic-cream` - Màu kem (#E8DCC4)
+- `rustic-beige` - Màu be (#D4C5A9)
+- `indigo-deep` - Màu chàm (#1A1A2E)
+- `earth-red` - Đất đỏ (#A0522D)
+
+**Font chữ:**
+- Heading: Crimson Text (serif)
+- Body: Inter (sans-serif)
+
+### 7. Configuration Files
+✅ Các file cấu hình:
+
+- `wrangler.toml` - Cloudflare Pages config
+- `vite.config.js` - Vite config
+- `tailwind.config.js` - Tailwind config
+- `postcss.config.js` - PostCSS config
+- `package.json` - Dependencies
+- `cors.json` - R2 CORS config
+
+### 8. Public Assets
+✅ Thư mục: `public/`
+
+- `favicon.svg` - Favicon với chữ B
+- `manifest.json` - PWA manifest
+- `robots.txt` - SEO robots
+- `_headers` - Security & caching headers
+- `_redirects` - SPA routing
+
+### 9. Documentation
+✅ Tài liệu đầy đủ:
+
+- `README.md` - Tổng quan và hướng dẫn cài đặt
+- `DEPLOYMENT.md` - Hướng dẫn deploy chi tiết
+- `CUSTOMIZATION.md` - Hướng dẫn tùy chỉnh nội dung
+- `MAINTENANCE.md` - Hướng dẫn bảo trì & vận hành
+- `CHECKLIST.md` - Checklist deploy production
+
+### 10. Helper Scripts
+✅ Scripts hỗ trợ:
+
+- `create-password-hash.sh` - Tạo password hash
+- `test-api.sh` - Test API endpoints
+
+---
+
+## 🎯 Tính Năng Chính
+
+### Frontend (Public)
+- ✅ Trang chủ với Hero banner giới thiệu nghệ nhân
+- ✅ Giới thiệu sự khác biệt M'nông vs Ê-đê
+- ✅ Danh sách sản phẩm với filter theo danh mục
+- ✅ Chi tiết sản phẩm (KHÔNG hiển thị giá - theo yêu cầu)
+- ✅ Nút "Tư vấn Zalo" và "Gọi Hotline" cố định mobile
+- ✅ Danh sách blog
+- ✅ Chi tiết blog với rich HTML content
+- ✅ Trang liên hệ với thông tin đầy đủ
+- ✅ Responsive Mobile-First (tối ưu cho điện thoại)
+- ✅ SEO optimized (meta tags, og:image, friendly URLs)
+
+### Admin Panel
+- ✅ Đăng nhập bảo mật với JWT
+- ✅ Dashboard quản lý sản phẩm và bài viết
+- ✅ CRUD sản phẩm (Create, Read, Update, Delete)
+- ✅ CRUD bài viết
+- ✅ Rich Text Editor (React Quill) cho blog
+- ✅ Upload ảnh trực tiếp lên R2
+- ✅ Auto-generate slug từ tiêu đề tiếng Việt
+
+---
+
+## 🚀 Các Bước Tiếp Theo
+
+### Trước khi Deploy:
+
+1. **Cài đặt Dependencies**
+```bash
+cd thocambyahoa
+npm install
+```
+
+2. **Tạo Password Hash cho Admin**
+```bash
+chmod +x create-password-hash.sh
+./create-password-hash.sh
+# Hoặc:
+echo -n "YOUR_PASSWORD" | openssl dgst -sha256
+```
+
+3. **Tạo D1 Database**
+```bash
+wrangler d1 create byahoa-db
+# Copy database_id vào wrangler.toml
+wrangler d1 execute byahoa-db --file=./schema.sql
+```
+
+4. **Tạo R2 Bucket**
+```bash
+wrangler r2 bucket create byahoa-media
+wrangler r2 bucket cors put byahoa-media --cors-config cors.json
+```
+
+5. **Cập nhật thông tin trong code**
+- Số điện thoại và Zalo trong `ContactButtons.jsx`
+- Thông tin liên hệ trong `ContactPage.jsx`
+- Domain trong `seo.js`
+- Password hash trong `wrangler.toml`
+
+6. **Build & Deploy**
+```bash
+npm run build
+wrangler pages deploy dist --project-name=thocambyahoa
+```
+
+7. **Cấu hình Cloudflare Dashboard**
+- Bindings: DB và MEDIA_BUCKET
+- Environment Variables
+- Custom Domain (nếu có)
+
+### Tham khảo chi tiết:
+📖 Xem file **DEPLOYMENT.md** để có hướng dẫn chi tiết từng bước
+📋 Xem file **CHECKLIST.md** để đảm bảo không bỏ sót bước nào
+
+---
+
+## 📊 Cấu trúc Thư mục
+
+```
+thocambyahoa/
+├── functions/api/          # Cloudflare Pages Functions (Backend)
+│   ├── auth.js
+│   ├── blogs.js
+│   ├── categories.js
+│   ├── jwt-helper.js
+│   ├── products.js
+│   └── upload.js
+│
+├── src/
+│   ├── components/         # React Components
+│   │   ├── BlogCard.jsx
+│   │   ├── ContactButtons.jsx
+│   │   ├── Footer.jsx
+│   │   ├── Header.jsx
+│   │   └── ProductCard.jsx
+│   │
+│   ├── pages/             # React Pages
+│   │   ├── AdminDashboardPage.jsx
+│   │   ├── AdminLoginPage.jsx
+│   │   ├── BlogDetailPage.jsx
+│   │   ├── BlogsPage.jsx
+│   │   ├── ContactPage.jsx
+│   │   ├── HomePage.jsx
+│   │   ├── ProductDetailPage.jsx
+│   │   └── ProductsPage.jsx
+│   │
+│   ├── styles/            # CSS Styles
+│   │   └── index.css
+│   │
+│   ├── utils/             # Utilities
+│   │   ├── api.js
+│   │   └── seo.js
+│   │
+│   ├── App.jsx            # Main App Component
+│   └── main.jsx           # Entry Point
+│
+├── public/                # Static Assets
+│   ├── images/
+│   ├── _headers
+│   ├── _redirects
+│   ├── favicon.svg
+│   ├── manifest.json
+│   └── robots.txt
+│
+├── schema.sql             # Database Schema + Seed Data
+├── wrangler.toml          # Cloudflare Config
+├── package.json           # Dependencies
+├── vite.config.js         # Vite Config
+├── tailwind.config.js     # Tailwind Config
+├── cors.json              # R2 CORS Config
+│
+└── Documentation/
+    ├── README.md
+    ├── DEPLOYMENT.md
+    ├── CUSTOMIZATION.md
+    ├── MAINTENANCE.md
+    └── CHECKLIST.md
+```
+
+---
+
+## 💰 Chi Phí Dự Kiến (Cloudflare Free Tier)
+
+Với traffic vừa phải (< 100k requests/tháng):
+
+| Service | Free Tier | Chi phí |
+|---------|-----------|---------|
+| Pages | 500 builds/month | **FREE** |
+| D1 | 5GB storage, 5M reads/day | **FREE** |
+| R2 | 10GB storage, 10M operations | **FREE** |
+| Bandwidth | Unlimited | **FREE** |
+| SSL Certificate | Auto | **FREE** |
+
+**Tổng chi phí: $0/tháng** ✨
+
+---
+
+## 📞 Thông tin Cần Cập nhật
+
+**⚠️ QUAN TRỌNG**: Thay đổi những thông tin sau trước khi deploy production:
+
+1. **Số điện thoại**: Tìm `0123456789` và thay bằng số thật
+2. **Link Zalo**: Tìm `https://zalo.me/0123456789` và thay bằng link thật
+3. **Email**: Tìm `contact@thocambyahoa.com` và thay bằng email thật (nếu có)
+4. **Password Admin**: Tạo password mạnh và hash SHA-256
+5. **JWT_SECRET**: Tạo random string dài
+6. **R2_PUBLIC_URL**: Cập nhật sau khi setup R2 public domain
+
+---
+
+## 🎨 Thiết kế
+
+### Phong cách: Rustic/Ethnic Đại Ngàn
+- Tone màu ấm trầm của đất mộc và gỗ tự nhiên
+- Màu đen chàm truyền thống
+- Màu kem đất/be cát tạo sự trang nhã
+- Font serif cổ điển cho tiêu đề
+- Font sans-serif hiện đại cho nội dung
+
+### Mobile-First Responsive
+- Tối ưu hoàn hảo cho thiết bị di động
+- Nút liên hệ cố định dưới màn hình mobile
+- Touch-friendly với kích thước nút phù hợp
+- Layout linh hoạt cho mọi kích thước màn hình
+
+---
+
+## 🔒 Bảo mật
+
+- ✅ JWT authentication với HTTP-only Cookie
+- ✅ Password hashed với SHA-256
+- ✅ Admin routes protected
+- ✅ File upload validation (type + size)
+- ✅ CORS configured
+- ✅ Security headers
+- ✅ XSS protection
+
+---
+
+## 🌟 Điểm Nổi Bật
+
+1. **100% Serverless** - Không cần quản lý server
+2. **Global CDN** - Tốc độ truy cập nhanh toàn cầu
+3. **Auto-scaling** - Tự động scale theo traffic
+4. **Free SSL** - HTTPS tự động
+5. **Zero Config** - Deploy trong vài phút
+6. **Vietnamese SEO** - Tối ưu cho tiếng Việt
+7. **Mobile Optimized** - Trải nghiệm mobile hoàn hảo
+
+---
+
+## 📚 Tài liệu Tham khảo
+
+- [Cloudflare Pages Docs](https://developers.cloudflare.com/pages/)
+- [Cloudflare D1 Docs](https://developers.cloudflare.com/d1/)
+- [Cloudflare R2 Docs](https://developers.cloudflare.com/r2/)
+- [React Documentation](https://react.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)
+
+---
+
+## 🙏 Lời Kết
+
+Dự án đã được lập trình hoàn chỉnh với:
+- ✅ Backend API đầy đủ (Cloudflare Pages Functions)
+- ✅ Frontend responsive và đẹp mắt (React + Tailwind)
+- ✅ Database với seed data (D1)
+- ✅ Admin panel chức năng đầy đủ
+- ✅ SEO tối ưu
+- ✅ Documentation chi tiết
+- ✅ Scripts hỗ trợ deployment
+
+**Bạn có thể deploy ngay lập tức!** 🚀
+
+Chúc bạn thành công với website Thổ cẩm Bya Hoa! 🎉
+
+---
+
+*Tạo ngày: 18/08/2026*
+*Bởi: Senior Fullstack Developer*
+*Stack: React + Cloudflare Ecosystem*
+````
+
+## File: QUICK_START.md
+````markdown
+# 🚀 Quick Start Guide
+
+## Bắt đầu nhanh trong 10 phút
+
+### Bước 1: Cài đặt Dependencies (2 phút)
+```bash
+npm install
+```
+
+### Bước 2: Tạo Password cho Admin (1 phút)
+```bash
+# Cấp quyền thực thi cho script
+chmod +x create-password-hash.sh
+
+# Chạy script
+./create-password-hash.sh
+
+# Nhập mật khẩu và copy hash vào wrangler.toml
+```
+
+### Bước 3: Setup Cloudflare D1 Database (3 phút)
+```bash
+# Login Cloudflare
+wrangler login
+
+# Tạo database
+wrangler d1 create byahoa-db
+
+# Copy database_id vào wrangler.toml (dòng database_id)
+
+# Chạy migration
+wrangler d1 execute byahoa-db --file=./schema.sql
+
+# Kiểm tra
+wrangler d1 execute byahoa-db --command="SELECT * FROM products"
+```
+
+### Bước 4: Setup Cloudflare R2 Storage (2 phút)
+```bash
+# Tạo bucket
+wrangler r2 bucket create byahoa-media
+
+# Cấu hình CORS
+wrangler r2 bucket cors put byahoa-media --cors-config cors.json
+
+# Enable public access
+wrangler r2 bucket domain add byahoa-media --domain auto
+
+# Copy URL và cập nhật R2_PUBLIC_URL trong wrangler.toml
+```
+
+### Bước 5: Build & Deploy (2 phút)
+```bash
+# Build
+npm run build
+
+# Deploy
+wrangler pages deploy dist --project-name=thocambyahoa
+
+# Lưu deployment URL
+```
+
+### Bước 6: Cấu hình Cloudflare Dashboard
+1. Vào https://dash.cloudflare.com
+2. Pages > thocambyahoa > Settings > Functions
+3. Thêm Bindings:
+   - D1: `DB` → `byahoa-db`
+   - R2: `MEDIA_BUCKET` → `byahoa-media`
+4. Thêm Environment Variables:
+   - `JWT_SECRET`: (tạo bằng `openssl rand -base64 32`)
+   - `ADMIN_USERNAME`: `admin@byahoa.com`
+   - `ADMIN_PASSWORD_HASH`: (hash từ bước 2)
+   - `R2_PUBLIC_URL`: (URL từ bước 4)
+
+### Bước 7: Test Website
+```bash
+# Mở deployment URL
+# Test các trang:
+# - /
+# - /san-pham
+# - /cau-chuyen
+# - /admin (login với username/password)
+```
+
+---
+
+## ⚠️ Trước khi Deploy Production
+
+### Cập nhật thông tin thật:
+
+**File: `src/components/ContactButtons.jsx`**
+- Dòng 4: `const zaloLink = 'https://zalo.me/0123456789'` → Số thật
+- Dòng 5: `const phoneNumber = '0123456789'` → Số thật
+
+**File: `src/pages/ContactPage.jsx`**
+- Dòng 48: Số hotline
+- Dòng 59: Email
+
+**File: `src/pages/ProductDetailPage.jsx`**
+- Dòng 111: Link Zalo
+- Dòng 122: Link tel
+
+**File: `src/utils/seo.js`**
+- Dòng 61: `siteUrl: 'https://thocambyahoa.com'` → Domain thật
+
+---
+
+## 🆘 Troubleshooting
+
+### Lỗi: Database not found
+```bash
+# Kiểm tra database_id trong wrangler.toml
+wrangler d1 info byahoa-db
+```
+
+### Lỗi: Upload ảnh không work
+```bash
+# Kiểm tra R2 CORS
+wrangler r2 bucket cors get byahoa-media
+```
+
+### Lỗi: Không login được admin
+```bash
+# Test password hash
+echo -n "YOUR_PASSWORD" | openssl dgst -sha256
+# So sánh với ADMIN_PASSWORD_HASH
+```
+
+---
+
+## 📚 Tài liệu Chi tiết
+
+- **DEPLOYMENT.md**: Hướng dẫn deploy chi tiết từng bước
+- **CUSTOMIZATION.md**: Tùy chỉnh nội dung
+- **MAINTENANCE.md**: Bảo trì & vận hành
+- **CHECKLIST.md**: Checklist đầy đủ
+- **PROJECT_SUMMARY.md**: Tổng quan dự án
+
+---
+
+## ✅ Checklist Nhanh
+
+- [ ] `npm install`
+- [ ] Tạo password hash
+- [ ] Tạo D1 database
+- [ ] Chạy migration
+- [ ] Tạo R2 bucket
+- [ ] Cấu hình CORS
+- [ ] Cập nhật wrangler.toml
+- [ ] Cập nhật số điện thoại/Zalo trong code
+- [ ] Build project
+- [ ] Deploy
+- [ ] Cấu hình bindings trên Dashboard
+- [ ] Test website
+
+---
+
+## 💡 Tips
+
+1. **Development Local**: 
+   ```bash
+   npm run dev
+   # Website chạy ở http://localhost:3000
+   ```
+
+2. **Test API Local**:
+   ```bash
+   chmod +x test-api.sh
+   ./test-api.sh http://localhost:3000
+   ```
+
+3. **Update Code**:
+   ```bash
+   npm run build
+   npm run deploy
+   ```
+
+4. **Backup Database**:
+   ```bash
+   wrangler d1 export byahoa-db --output=backup.sql
+   ```
+
+---
+
+**Chi phí**: $0/tháng với Cloudflare Free Tier! 🎉
+
+**Support**: Đọc DEPLOYMENT.md để biết chi tiết
+````
+
+## File: quick-push.sh
+````bash
+#!/bin/bash
+
+# Quick commit and push script
+
+git add .
+git commit -m "Fix: Simplify wrangler.toml for Cloudflare Pages
+
+- Remove Workers-specific configuration
+- Keep minimal Pages configuration
+- Bindings will be configured in Dashboard
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+
+git push
+
+echo ""
+echo "✅ Code pushed to GitHub!"
+echo ""
+echo "Next steps:"
+echo "1. Cloudflare will auto-deploy from GitHub"
+echo "2. In Dashboard, set Deploy command to: echo 'Build complete'"
+echo "3. Configure bindings (D1 + R2) in Functions tab"
+echo "4. Add environment variables"
+````
+
+## File: README.md
+````markdown
+# Thổ cẩm Bya Hoa - Website giới thiệu sản phẩm
+
+Website giới thiệu thương hiệu Thổ cẩm Bya Hoa - sản phẩm thổ cẩm tơ tằm cao cấp dệt thủ công bởi nghệ nhân H'Kim Hoa Byă.
+
+## Tech Stack
+
+- **Frontend**: React + Vite + Tailwind CSS
+- **Backend**: Cloudflare Pages Functions
+- **Database**: Cloudflare D1 (SQLite)
+- **Storage**: Cloudflare R2
+- **Authentication**: JWT với HTTP-only Cookie
+
+## Cài đặt Local
+
+### 1. Cài đặt dependencies
+
+```bash
+npm install
+```
+
+### 2. Tạo D1 Database
+
+```bash
+# Tạo database mới
+npx wrangler d1 create byahoa-db
+
+# Lấy database_id và cập nhật vào wrangler.toml
+# Chạy migration
+npx wrangler d1 execute byahoa-db --file=./schema.sql
+```
+
+### 3. Tạo R2 Bucket
+
+```bash
+# Tạo R2 bucket cho media
+npx wrangler r2 bucket create byahoa-media
+```
+
+### 4. Cấu hình Environment Variables
+
+Cập nhật file `wrangler.toml` với thông tin database và bucket:
+
+```toml
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "byahoa-db"
+database_id = "YOUR_DATABASE_ID_HERE"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "byahoa-media"
+```
+
+### 5. Tạo mật khẩu Admin
+
+```bash
+# Tạo hash SHA-256 cho mật khẩu (ví dụ: "admin123")
+echo -n "admin123" | openssl dgst -sha256
+```
+
+Cập nhật `ADMIN_PASSWORD_HASH` trong `wrangler.toml` với hash vừa tạo.
+
+### 6. Chạy Development Server
+
+```bash
+# Terminal 1: Frontend dev server
+npm run dev
+
+# Terminal 2: Cloudflare Pages Functions (nếu cần test API local)
+npx wrangler pages dev dist --d1=DB=byahoa-db --r2=MEDIA_BUCKET=byahoa-media
+```
+
+## Deploy lên Cloudflare Pages
+
+### 1. Build project
+
+```bash
+npm run build
+```
+
+### 2. Deploy lên Cloudflare Pages
+
+```bash
+# Lần đầu tiên
+npx wrangler pages deploy dist --project-name=thocambyahoa
+
+# Các lần sau
+npm run deploy
+```
+
+### 3. Cấu hình Domain và Environment Variables
+
+1. Vào Cloudflare Dashboard > Pages > thocambyahoa
+2. Settings > Environment Variables > Production
+3. Thêm các biến môi trường:
+   - `JWT_SECRET`: secret key cho JWT
+   - `ADMIN_USERNAME`: email admin
+   - `ADMIN_PASSWORD_HASH`: hash SHA-256 của mật khẩu
+   - `R2_PUBLIC_URL`: URL công khai của R2 bucket
+
+4. Bindings:
+   - D1 Database: `DB` → `byahoa-db`
+   - R2 Bucket: `MEDIA_BUCKET` → `byahoa-media`
+
+### 4. Cấu hình R2 Public Access
+
+```bash
+# Cấu hình CORS cho R2 bucket
+npx wrangler r2 bucket cors put byahoa-media --cors-config cors.json
+```
+
+File `cors.json`:
+```json
+[
+  {
+    "AllowedOrigins": ["https://thocambyahoa.com"],
+    "AllowedMethods": ["GET", "PUT", "POST"],
+    "AllowedHeaders": ["*"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+## Cấu trúc Dự án
+
+```
+thocambyahoa/
+├── functions/
+│   └── api/
+│       ├── auth.js          # API đăng nhập/logout
+│       ├── products.js      # API sản phẩm
+│       ├── blogs.js         # API bài viết
+│       ├── categories.js    # API danh mục
+│       ├── upload.js        # API upload ảnh
+│       └── jwt-helper.js    # JWT utilities
+├── src/
+│   ├── components/
+│   │   ├── Header.jsx
+│   │   ├── Footer.jsx
+│   │   ├── ContactButtons.jsx
+│   │   ├── ProductCard.jsx
+│   │   └── BlogCard.jsx
+│   ├── pages/
+│   │   ├── HomePage.jsx
+│   │   ├── ProductsPage.jsx
+│   │   ├── ProductDetailPage.jsx
+│   │   ├── BlogsPage.jsx
+│   │   ├── BlogDetailPage.jsx
+│   │   ├── ContactPage.jsx
+│   │   ├── AdminLoginPage.jsx
+│   │   └── AdminDashboardPage.jsx
+│   ├── utils/
+│   │   ├── api.js           # API client
+│   │   └── seo.js           # SEO helpers
+│   ├── styles/
+│   │   └── index.css
+│   ├── App.jsx
+│   └── main.jsx
+├── public/
+│   └── images/
+├── schema.sql               # Database schema & seed data
+├── wrangler.toml           # Cloudflare config
+├── package.json
+├── vite.config.js
+├── tailwind.config.js
+└── postcss.config.js
+```
+
+## Tính năng
+
+### Frontend (Public)
+- ✅ Trang chủ với Hero banner và giới thiệu
+- ✅ Danh sách sản phẩm với filter theo danh mục
+- ✅ Chi tiết sản phẩm (KHÔNG hiển thị giá)
+- ✅ Danh sách bài viết blog
+- ✅ Chi tiết bài viết với rich content
+- ✅ Trang liên hệ
+- ✅ Nút liên hệ Zalo/Hotline cố định (Mobile)
+- ✅ Responsive Mobile-First design
+- ✅ SEO tối ưu (meta tags, og:image, friendly URLs)
+
+### Backend (Admin)
+- ✅ Đăng nhập admin với JWT
+- ✅ Quản lý sản phẩm (CRUD)
+- ✅ Quản lý bài viết với Rich Text Editor
+- ✅ Upload ảnh lên R2
+- ✅ Auto-generate slug từ tiêu đề
+
+## Thông tin liên hệ
+
+- **Địa chỉ**: 2A/10 Bùi Thị Xuân, Phường Buôn Ma Thuột, Tỉnh Đắk Lắk
+- **Hotline**: 0123 456 789 (cập nhật số thật)
+- **Email**: contact@thocambyahoa.com
+- **Zalo**: https://zalo.me/0123456789 (cập nhật số thật)
+
+## License
+
+© 2024 Công ty TNHH Bya Hoa. Bảo lưu mọi quyền.
+````
+
+## File: schema.sql
+````sql
+-- Cloudflare D1 Database Schema for Thổ cẩm Bya Hoa
+-- Created: 2026-08-18
+
+-- Categories table
+CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Products table
+CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    category_id INTEGER NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+);
+
+-- Blogs table
+CREATE TABLE IF NOT EXISTS blogs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    summary TEXT,
+    content TEXT,
+    cover_image TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert seed data for categories
+INSERT INTO categories (name, slug) VALUES
+    ('Khăn choàng Thổ cẩm dệt từ sợi tự nhiên', 'khan-choang-tho-cam'),
+    ('Túi xách Thổ cẩm thời trang cao cấp', 'tui-xach-tho-cam');
+
+-- Insert seed data for products
+INSERT INTO products (title, slug, category_id, description, image_url) VALUES
+(
+    'Túi xách thổ cẩm BYA HOA màu xanh phối hồng',
+    'tui-xach-tho-cam-mau-xanh-phoi-hong',
+    2,
+    'Mã sản phẩm: BYAHOA-TC-CHUNG-TUI-XANH-HONG-M01
+
+Chất liệu: Kết hợp tơ tằm mềm mại và sợi tơ cây gai bền chắc dệt tay thủ công bởi nghệ nhân H''Kim Hoa Byă.
+
+Mô tả: Túi thời trang phom đứng thanh lịch với mảng họa tiết dệt thổ cẩm hồng - xanh nổi bật ở mặt trước. Thiết kế hiện đại kết hợp tinh hoa văn hóa Tây Nguyên, phù hợp đi làm, đi chơi hay làm quà tặng đầy ý nghĩa.
+
+Đặc điểm:
+• Dệt thủ công 100% từ sợi tự nhiên
+• Họa tiết truyền thống M''nông được cách điệu tinh tế
+• Bền đẹp theo thời gian
+• Mỗi sản phẩm là duy nhất, mang dấu ấn riêng của nghệ nhân',
+    '/images/products/tui-xach-xanh-hong.jpg'
+),
+(
+    'Khăn choàng thổ cẩm tơ tằm hoa văn M''nông',
+    'khan-choang-tho-cam-to-tam-hoa-van-mnong',
+    1,
+    'Chất liệu: Tơ tằm tự nhiên Bảo Lộc 100%, mềm mại, mát mùa hè, ấm mùa đông.
+
+Màu sắc: Tone xám tím phối trắng kem nền nã, thanh lịch.
+
+Họa tiết: Hoa văn cách điệu từ sinh hoạt đại ngàn của người M''nông - những hình khối mềm mại, đa sắc độ, thể hiện sự hòa quyện với thiên nhiên.
+
+Đặc điểm:
+• Tơ tằm tự nhiên cao cấp, mềm mịn như lụa
+• Màu sắc nhẹ nhàng, dễ phối đồ
+• Họa tiết tinh tế, không quá rối mắt
+• Phù hợp cho mọi lứa tuổi, mọi dịp
+• Giữ ấm tốt nhưng vẫn thoáng mát
+
+Kích thước: 180cm x 65cm (± 2cm)',
+    '/images/products/khan-choang-mnong.jpg'
+),
+(
+    'Khăn choàng thổ cẩm tơ tằm hoa văn Ê-đê',
+    'khan-choang-tho-cam-to-tam-hoa-van-ede',
+    1,
+    'Chất liệu: Tơ tằm tự nhiên Bảo Lộc kết hợp sợi tơ gai truyền thống.
+
+Màu sắc: Tương phản sắc nét - Xanh viền vàng/trắng hoặc Vàng viền hồng - thể hiện khí chất mạnh mẽ, quyết đoán của người Ê-đê.
+
+Họa tiết: Hình học chạy dọc biên khăn với đường nét sắc sảo, rõ ràng, mang đậm dấu ấn văn hóa Tây Nguyên cổ xưa.
+
+Đặc điểm:
+• Màu sắc tương phản nổi bật, sang trọng
+• Họa tiết hình học đặc trưng văn hóa Ê-đê
+• Phù hợp với phong cách mạnh mẽ, cá tính
+• Chất liệu cao cấp, bền màu theo thời gian
+• Tạo điểm nhấn ấn tượng cho trang phục
+
+Kích thước: 180cm x 65cm (± 2cm)',
+    '/images/products/khan-choang-ede.jpg'
+);
+
+-- Insert seed data for blogs
+INSERT INTO blogs (title, slug, summary, content, cover_image) VALUES
+(
+    'Hồi sinh hoa văn cổ - Hành trình của nghệ nhân H''Kim Hoa Byă',
+    'hoi-sinh-hoa-van-co-hanh-trinh-cua-nghe-nhan',
+    'Câu chuyện về người phụ nữ M''nông dành cả thanh xuân để gìn giữ và phát triển nghệ thuật dệt thổ cẩm truyền thống từ lụa tơ tằm và sợi tự nhiên Tây Nguyên.',
+    '<h2>Từ Đại Ngàn đến Thế Giới</h2>
+<p>H''Kim Hoa Byă, sinh năm 1975 tại làng Buôn Tua, huyện Krông Năng, tỉnh Đắk Lắk, lớn lên trong tiếng khung cửi đều đặn của mẹ và bà. Từ nhỏ, cô đã say mê theo dõi những ngón tay khéo léo của các bà các mẹ biến những sợi tơ thô thành những tấm vải thổ cẩm rực rỡ sắc màu.</p>
+
+<h2>Tơ Tằm - Hơi Thở Mới cho Thổ Cẩm Truyền Thống</h2>
+<p>Khác với thổ cẩm truyền thống thường dệt từ bông, cô Hoa đã mạnh dạn đổi mới bằng việc sử dụng tơ tằm tự nhiên Bảo Lộc - loại tơ mềm mại, bóng mượt nhưng vẫn giữ được độ bền cao. Sự kết hợp giữa tơ tằm với sợi gai, sợi tre, sợi cà phê tạo nên những sản phẩm vừa truyền thống vừa hiện đại.</p>
+
+<h2>Bya Hoa - Tên Gọi Mang Ý Nghĩa</h2>
+<p>"Bya" trong tiếng M''nông có nghĩa là "dệt", còn "Hoa" là tên của cô. Thổ cẩm Bya Hoa không chỉ là sản phẩm thủ công, mà là câu chuyện văn hóa, là tâm huyết của một người phụ nữ Tây Nguyên muốn giữ gìn và phát triển di sản tổ tiên.</p>
+
+<h2>Triết Lý Sản Xuất</h2>
+<p>Mỗi sản phẩm của Bya Hoa đều được dệt thủ công 100%, không qua máy móc. Điều này đảm bảo mỗi sản phẩm đều mang một dấu ấn riêng, một câu chuyện riêng. Cô Hoa không sản xuất hàng loạt, mà chỉ tạo ra những sản phẩm giới hạn, được chăm chút tỉ mỉ từng chi tiết.</p>',
+    '/images/blogs/nghe-nhan-hoa.jpg'
+),
+(
+    'Sự khác biệt giữa thổ cẩm M''nông và Ê-đê',
+    'su-khac-biet-giua-tho-cam-mnong-va-ede',
+    'Tìm hiểu về hai phong cách thổ cẩm đặc trưng của Tây Nguyên - sự mềm mại đa sắc của M''nông và sự mạnh mẽ tương phản của Ê-đê.',
+    '<h2>Thổ Cẩm M''nông - Hơi Thở Của Rừng Xanh</h2>
+<p>Thổ cẩm M''nông mang đậm hơi thở của thiên nhiên Tây Nguyên với những họa tiết cách điệu từ cây cỏ, con vật, sinh hoạt đại ngàn. Màu sắc của thổ cẩm M''nông thường là những tone màu đất, màu lá, màu gỗ - nhẹ nhàng, hài hòa, không quá rối mắt.</p>
+
+<h3>Đặc điểm nhận biết:</h3>
+<ul>
+<li>Họa tiết mềm mại, cong mượt, ít góc cạnh</li>
+<li>Màu sắc phối hợp hài hòa, chuyển sắc nhẹ nhàng</li>
+<li>Biểu tượng thiên nhiên: lá cây, hoa văn, động vật rừng núi</li>
+<li>Phong cách: Dịu dàng, gần gũi, gắn liền với cuộc sống nông nghiệp và rừng núi</li>
+</ul>
+
+<h2>Thổ Cẩm Ê-đê - Khí Phách Cao Nguyên</h2>
+<p>Ngược lại, thổ cẩm Ê-đê mang phong cách mạnh mẽ, quyết đoán hơn. Họa tiết hình học sắc sảo, màu sắc tương phản rõ rệt (đỏ-đen, vàng-xanh, trắng-đen) thể hiện tính cách cương trực, gan dạ của người Ê-đê.</p>
+
+<h3>Đặc điểm nhận biết:</h3>
+<ul>
+<li>Họa tiết hình học: chữ nhật, tam giác, đường thẳng, zigzag</li>
+<li>Màu sắc tương phản mạnh mẽ, ranh giới rõ ràng</li>
+<li>Biểu tượng quyền lực: trống đồng, voi, khí giới</li>
+<li>Phong cách: Mạnh mẽ, sang trọng, thể hiện đẳng cấp xã hội</li>
+</ul>
+
+<h2>Bya Hoa - Kết Hợp Tinh Hoa Hai Nền Văn Hóa</h2>
+<p>Tại Bya Hoa, chúng tôi tôn vinh cả hai phong cách. Khách hàng có thể chọn sản phẩm mang phong cách M''nông nhẹ nhàng cho cuộc sống hàng ngày, hoặc phong cách Ê-đê mạnh mẽ cho những dịp quan trọng, trang trọng hơn.</p>',
+    '/images/blogs/su-khac-biet.jpg'
+),
+(
+    'Quy trình dệt thổ cẩm tơ tằm thủ công',
+    'quy-trinh-det-tho-cam-to-tam-thu-cong',
+    'Khám phá quy trình tỉ mỉ và công phu để tạo ra một sản phẩm thổ cẩm Bya Hoa chất lượng cao.',
+    '<h2>Bước 1: Chọn Tơ Tằm Tự Nhiên</h2>
+<p>Tơ tằm được chọn lọc kỹ càng từ các làng nghề truyền thống Bảo Lộc. Chỉ chọn tơ tằm có độ mịn, độ bóng và độ bền cao nhất. Tơ phải đồng đều, không đứt gãy, không bị pha tạp chất.</p>
+
+<h2>Bước 2: Nhuộm Màu Tự Nhiên</h2>
+<p>Màu sắc thổ cẩm Bya Hoa được nhuộm từ thực vật và khoáng chất tự nhiên:</p>
+<ul>
+<li>Màu xanh chàm: từ cây chàm rừng</li>
+<li>Màu vàng: từ củ nghệ, cây hoè</li>
+<li>Màu nâu đỏ: từ vỏ cây dầu, thân cây sù</li>
+<li>Màu đen: từ quả dầu, lá gỗ lim</li>
+</ul>
+
+<h2>Bước 3: Chuẩn Bị Khung Cửi</h2>
+<p>Khung cửi truyền thống được dựng và căng sợi dọc (sợi khổ) cẩn thận. Bước này đòi hỏi sự chính xác cao vì nó quyết định độ đều và độ căng của sản phẩm cuối cùng.</p>
+
+<h2>Bước 4: Dệt Thủ Công</h2>
+<p>Đây là bước quan trọng và mất nhiều thời gian nhất. Nghệ nhân ngồi bên khung cửi, từng tay luồn sợi ngang (sợi đưa), đưa thoi qua lại. Họa tiết được tạo ra bằng cách chọn lọc sợi, nâng hạ sợi dọc theo mẫu thiết kế sẵn.</p>
+
+<p>Một tấm khăn choàng thổ cẩm trung bình mất từ 7-10 ngày làm việc. Một chiếc túi xách phức tạp có thể mất đến 2-3 tuần.</p>
+
+<h2>Bước 5: Hoàn Thiện</h2>
+<p>Sau khi dệt xong, sản phẩm được cắt khỏi khung cửi, may viền, gấp nếp, và kiểm tra chất lượng tỉ mỉ. Mỗi sợi chỉ thừa đều được cắt tỉa cẩn thận. Sản phẩm sau đó được đóng gói trong túi vải lanh kèm thẻ thông tin nghệ nhân.</p>
+
+<h2>Giá Trị Đích Thực</h2>
+<p>Chính vì quy trình thủ công tỉ mỉ như vậy mà mỗi sản phẩm Bya Hoa đều mang giá trị nghệ thuật cao, không thể sản xuất hàng loạt. Đây không chỉ là món đồ thời trang, mà là tác phẩm nghệ thuật đích thực.</p>',
+    '/images/blogs/quy-trinh-det.jpg'
+);
+````
+
+## File: tailwind.config.js
+````javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        'rustic-dark': '#2B1810',
+        'rustic-brown': '#4A3728',
+        'rustic-wood': '#8B6F47',
+        'rustic-cream': '#E8DCC4',
+        'rustic-beige': '#D4C5A9',
+        'indigo-deep': '#1A1A2E',
+        'earth-red': '#A0522D',
+      },
+      fontFamily: {
+        'serif': ['Crimson Text', 'Georgia', 'serif'],
+        'sans': ['Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
+````
+
+## File: test-api.sh
+````bash
+#!/bin/bash
+
+# Script test API endpoints
+# Sử dụng: ./test-api.sh https://thocambyahoa.com
+
+BASE_URL="${1:-http://localhost:8788}"
+
+echo "==================================="
+echo "Testing API Endpoints"
+echo "Base URL: $BASE_URL"
+echo "==================================="
+echo ""
+
+# Test Categories
+echo "1. Testing GET /api/categories..."
+curl -s "$BASE_URL/api/categories" | jq '.' || echo "Failed"
+echo ""
+echo ""
+
+# Test Products
+echo "2. Testing GET /api/products..."
+curl -s "$BASE_URL/api/products" | jq '.[:2]' || echo "Failed"
+echo ""
+echo ""
+
+# Test Blogs
+echo "3. Testing GET /api/blogs..."
+curl -s "$BASE_URL/api/blogs?limit=2" | jq '.' || echo "Failed"
+echo ""
+echo ""
+
+# Test Product by slug
+echo "4. Testing GET /api/products/:slug..."
+curl -s "$BASE_URL/api/products/tui-xach-tho-cam-mau-xanh-phoi-hong" | jq '.' || echo "Failed"
+echo ""
+echo ""
+
+# Test Blog by slug
+echo "5. Testing GET /api/blogs/:slug..."
+curl -s "$BASE_URL/api/blogs/hoi-sinh-hoa-van-co-hanh-trinh-cua-nghe-nhan" | jq '.' || echo "Failed"
+echo ""
+echo ""
+
+echo "==================================="
+echo "API Testing Complete"
+echo "==================================="
+````
+
+## File: src/styles/index.css
+````css
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom CSS Variables */
+:root {
+  --rustic-dark: #2B1810;
+  --rustic-brown: #4A3728;
+  --rustic-wood: #8B6F47;
+  --rustic-cream: #E8DCC4;
+  --rustic-beige: #D4C5A9;
+  --indigo-deep: #1A1A2E;
+  --earth-red: #A0522D;
+}
+
+/* Base styles */
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #FAFAF8;
+  color: var(--rustic-dark);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-weight: 600;
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--rustic-cream);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--rustic-wood);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--rustic-brown);
+}
+
+/* Blog content styles */
+.blog-content {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 1.125rem;
+  line-height: 1.8;
+  color: var(--rustic-dark);
+}
+
+.blog-content h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-top: 2rem;
+  margin-bottom: 1rem;
+  color: var(--rustic-brown);
+}
+
+.blog-content h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--rustic-brown);
+}
+
+.blog-content p {
+  margin-bottom: 1.25rem;
+}
+
+.blog-content ul, .blog-content ol {
+  margin-left: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.blog-content li {
+  margin-bottom: 0.5rem;
+}
+
+.blog-content img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+}
+
+/* Rich text editor styles */
+.ql-container {
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 1rem;
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+.ql-toolbar {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
+  background-color: #f9f9f9;
+}
+
+.ql-editor {
+  min-height: 400px;
+}
+
+/* Button transitions */
+button, a {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Image loading placeholder */
+img {
+  background-color: var(--rustic-cream);
+}
+
+/* Mobile-first responsive utilities */
+@media (max-width: 640px) {
+  .blog-content {
+    font-size: 1rem;
+  }
+
+  .blog-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .blog-content h3 {
+    font-size: 1.25rem;
+  }
+}
+
+/* Loading spinner */
+.spinner {
+  border: 3px solid var(--rustic-cream);
+  border-top: 3px solid var(--rustic-brown);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Fade in animation */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+````
+
+## File: src/main.jsx
+````javascript
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+// Force rebuild - timestamp: 2026-08-18 05:45
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+````
+
+## File: index.html
+````html
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Thổ cẩm Bya Hoa - Sản phẩm thổ cẩm tơ tằm tự nhiên dệt thủ công bởi nghệ nhân H'Kim Hoa Byă. Túi xách, khăn choàng thổ cẩm cao cấp với họa tiết M'nông và Ê-đê truyền thống." />
+    <meta name="keywords" content="thổ cẩm, bya hoa, tơ tằm, tây nguyên, thổ cẩm tây nguyên, túi xách thổ cẩm, khăn choàng thổ cẩm" />
+    <meta name="author" content="Bya Hoa" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://thocambyahoa.com/" />
+    <meta property="og:title" content="Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên" />
+    <meta property="og:description" content="Thổ cẩm Bya Hoa - Sản phẩm thổ cẩm tơ tằm tự nhiên dệt thủ công bởi nghệ nhân H'Kim Hoa Byă." />
+    <meta property="og:image" content="https://thocambyahoa.com/images/og-default.jpg" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://thocambyahoa.com/" />
+    <meta property="twitter:title" content="Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên" />
+    <meta property="twitter:description" content="Thổ cẩm Bya Hoa - Sản phẩm thổ cẩm tơ tằm tự nhiên dệt thủ công bởi nghệ nhân H'Kim Hoa Byă." />
+    <meta property="twitter:image" content="https://thocambyahoa.com/images/og-default.jpg" />
+
+    <title>Thổ cẩm Bya Hoa - Nghệ thuật dệt thổ cẩm Tây Nguyên</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
+````
+
+## File: package.json
+````json
+{
+  "name": "thocambyahoa",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.0",
+    "react-quill": "^2.0.0",
+    "quill": "^2.0.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.41",
+    "tailwindcss": "^3.4.10",
+    "vite": "^5.4.2"
+  }
+}
+````
+
+## File: vite.config.js
+````javascript
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  publicDir: 'public',
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  },
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8788',
+        changeOrigin: true
+      }
+    }
+  }
+})
+````
+
+## File: wrangler.toml
+````toml
+# Cloudflare Pages Configuration
+# Không cần nhiều config - Cloudflare Pages tự động detect
+
+name = "thocambyahoa"
+compatibility_date = "2024-08-01"
+
+# Pages-specific config (optional)
+pages_build_output_dir = "dist"
+
+# Note: Bindings (D1, R2) và Environment Variables
+# được cấu hình trực tiếp trong Cloudflare Dashboard
+# không cần khai báo ở đây cho Pages project
+````
