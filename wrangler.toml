@@ -12,9 +12,9 @@ pages_build_output_dir = "dist"
 # không cần khai báo ở đây cho Pages project
 
 [[d1_databases]]
-binding = "byahoa_db"
-database_name = "byahoa-db"
-database_id = "2fcc7a4d-a636-4f45-83ad-8665e2085261"
+binding = "DB"
+database_name = "byahoa_db"
+database_id = "bb00e0a6-cdb3-4cb0-9dde-03285979e679"
 
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
