@@ -1,0 +1,5 @@
+# Redirect www to non-www
+https://www.thocambyahoa.com/* https://thocambyahoa.com/:splat 301!
+
+# SPA fallback - all routes go to index.html
+/* /index.html 200

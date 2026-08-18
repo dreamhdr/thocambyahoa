@@ -1,0 +1,18 @@
+{
+  "name": "Thổ cẩm Bya Hoa",
+  "short_name": "Bya Hoa",
+  "description": "Thổ cẩm tơ tằm tự nhiên dệt thủ công - Nghệ thuật truyền thống Tây Nguyên",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAFAF8",
+  "theme_color": "#4A3728",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

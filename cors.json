@@ -1,0 +1,22 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://thocambyahoa.com",
+      "https://*.pages.dev",
+      "http://localhost:3000"
+    ],
+    "AllowedMethods": [
+      "GET",
+      "PUT",
+      "POST",
+      "DELETE"
+    ],
+    "AllowedHeaders": [
+      "*"
+    ],
+    "ExposeHeaders": [
+      "ETag"
+    ],
+    "MaxAgeSeconds": 3600
+  }
+]
